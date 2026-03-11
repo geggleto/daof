@@ -135,10 +135,12 @@ capabilities:
       api_key: env(SENTIMENT_API_KEY)
   x_poster:
     type: tool
-    description: Post to X (bundled; stub or endpoint)
+    description: Post to X via Twitter API v2 SDK (bundled; stub when credentials omitted)
     config:
-      endpoint: "https://api.twitter.com/2/tweets"
-      api_key: env(X_API_KEY)
+      app_key: env(TWITTER_APP_KEY)
+      app_secret: env(TWITTER_APP_SECRET)
+      access_token: env(TWITTER_ACCESS_TOKEN)
+      access_token_secret: env(TWITTER_ACCESS_TOKEN_SECRET)
   metrics_fetcher:
     type: tool
     description: Fetch X/GA4 metrics (bundled)

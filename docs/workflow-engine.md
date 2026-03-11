@@ -59,7 +59,7 @@ Defined in `src/types/json.ts`. Used for step params and for values in `Workflow
 
 ## 2. Trigger types (parsed from manifest)
 
-Workflows have `trigger: string` in the manifest (e.g. `cron(0 9 * * *)` or `event(strategy_ready)`). The engine **parses** these. When running the org (scheduler mode), only **cron**-triggered workflows are scheduled; **event**-triggered workflows are for a future event-driven path.
+Workflows have `trigger: string` in the manifest (e.g. `cron(0 9 * * *)` or `event(strategy_ready)`). The engine **parses** these. When running the org (scheduler mode), **cron**-triggered workflows are run on the heartbeat when due; **event**-triggered workflows are run when the scheduler subscribes to the backbone events queue and receives a message whose `event_type` matches the workflow’s `event(eventName)`. The event message is expected to be JSON with `event_type` and optional `payload`; the workflow is run with `initialInput = { ...payload, __event_id }`, so step params can reference `{{ __initial.<key> }}` (e.g. `{{ __initial.url }}`, `{{ __initial.post_id }}`).
 
 ```ts
 type ParsedTrigger = CronTrigger | EventTrigger;

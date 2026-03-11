@@ -1,26 +1,31 @@
+import { TwitterApi } from "twitter-api-v2";
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
-import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
 
-function getEndpoint(def: CapabilityDefinition): string | undefined {
-  const c = def.config;
-  if (c && typeof c === "object" && "endpoint" in c && typeof (c as Record<string, unknown>).endpoint === "string") {
-    return (c as Record<string, string>).endpoint;
-  }
-  return undefined;
+function getStr(config: Record<string, unknown> | undefined, key: string): string {
+  if (!config || typeof config !== "object") return "";
+  const v = config[key];
+  return typeof v === "string" ? v : "";
+}
+
+function isDryRun(config: Record<string, unknown> | undefined): boolean {
+  if (!config || typeof config !== "object") return false;
+  const v = config.dry_run;
+  if (v === true) return true;
+  if (typeof v === "string" && (v === "true" || v === "1")) return true;
+  return false;
 }
 
 /**
- * Bundled XPoster capability. Input: { content, media_urls? }. Output: { post_id } or { ok: false, error }.
- * When config.endpoint and auth (config.auth or config.api_key) are set, POST to endpoint; otherwise returns stub { post_id: "stub" }.
- * Full X/Twitter API OAuth setup is required for real posts.
+ * Bundled XPoster capability using Twitter API v2 SDK. Input: { content, media_urls? }. Output: { post_id } or { ok: false, error }.
+ * Uses twitter-api-v2; when config has OAuth 1.0a credentials (app_key, app_secret, access_token, access_token_secret, all from env),
+ * posts the tweet via client.v2.tweet(content). Otherwise returns stub { post_id: "stub" }.
+ * When config.dry_run is true (or env-resolved "true"/"1"), skips the API call and returns { post_id: "dry-run", dry_run: true }.
  */
 export function createXPosterInstance(
   _capabilityId: string,
   def: CapabilityDefinition
 ): CapabilityInstance {
-  const endpoint = getEndpoint(def);
-
   return {
     async execute(
       input: CapabilityInput,
@@ -31,30 +36,29 @@ export function createXPosterInstance(
         return { ok: false, error: "Missing content" };
       }
 
-      const authHeaders = getAuthHeadersFromCapabilityConfig(def.config);
-      if (!endpoint || Object.keys(authHeaders).length === 0) {
+      const config = def.config as Record<string, unknown> | undefined;
+      if (isDryRun(config)) {
+        return { post_id: "dry-run", dry_run: true };
+      }
+
+      const appKey = getStr(config, "app_key");
+      const appSecret = getStr(config, "app_secret");
+      const accessToken = getStr(config, "access_token");
+      const accessSecret = getStr(config, "access_token_secret");
+
+      if (!appKey || !appSecret || !accessToken || !accessSecret) {
         return { post_id: "stub" };
       }
 
-      const body: Record<string, unknown> = { text: content };
-      if (Array.isArray(input.media_urls)) {
-        body.media_ids = input.media_urls;
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...authHeaders,
-      };
-
       try {
-        const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
-        const data = (await res.json()) as Record<string, unknown>;
-        if (!res.ok) {
-          const msg = typeof data?.error === "string" ? data.error : res.statusText;
-          return { ok: false, error: msg };
-        }
-        const dataId = data.data as Record<string, string> | undefined;
-        const postId = typeof data.id === "string" ? data.id : typeof dataId?.id === "string" ? dataId.id : "stub";
+        const client = new TwitterApi({
+          appKey,
+          appSecret,
+          accessToken,
+          accessSecret,
+        });
+        const result = await client.v2.tweet(content);
+        const postId = result.data?.id ?? "stub";
         return { post_id: postId };
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);

@@ -7,7 +7,7 @@ import { loadYaml, validate } from "../parser/index.js";
 import { bootstrap, connectBackbone } from "../runtime/bootstrap.js";
 import { runWorkflow } from "../workflow/executor.js";
 import { createAppCircuitBreaker } from "../fault/circuit-breaker.js";
-import { startHeartbeat, onHeartbeatRunDueWorkflows } from "../workflow/scheduler.js";
+import { startHeartbeat, onHeartbeatRunDueWorkflows, startEventSubscriber } from "../workflow/scheduler.js";
 import { createRedisWorkflowSemaphore, createInMemoryWorkflowSemaphore } from "../backbone/semaphore.js";
 import { createRedisRunRegistry } from "../backbone/run-registry.js";
 import {
@@ -77,7 +77,7 @@ runCmd.action(async (file: string) => {
       const workflowId = opts.workflow;
       const circuitBreaker = createAppCircuitBreaker({
         failureThreshold: 5,
-        timeoutMs: 30_000,
+        timeoutMs: 120_000,
       });
       const result = await runWorkflow(runtime, workflowId, undefined, {
         circuitBreaker,
@@ -120,8 +120,13 @@ runCmd.action(async (file: string) => {
         await onHeartbeatRunDueWorkflows(runtime, payload, semaphore, runRegistry);
       });
 
+      const stopEventSubscriber = runtime.backbone
+        ? await startEventSubscriber(runtime, semaphore, runRegistry)
+        : () => {};
+
       const shutdown = () => {
         stopHeartbeat();
+        stopEventSubscriber();
         if (process.env.DAOF_PID_FILE) removePidFile(process.env.DAOF_PID_FILE);
         process.exit(0);
       };

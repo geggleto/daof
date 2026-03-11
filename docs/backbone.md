@@ -97,6 +97,8 @@ await adapter.disconnect();
 - **`daof:semaphore:workflows`** — Scheduler concurrency: integer count of current workflow runs (see [src/backbone/semaphore.ts](src/backbone/semaphore.ts)). Used when running the org with a scheduler.
 - **`daof:run:<run_id>`** — Active run registry; **`daof:run:<run_id>:cancel`** — Cancel flag set by `daof kill <run_id>` (see [src/backbone/run-registry.ts](src/backbone/run-registry.ts)).
 
+When you run the org with `daof run <file>` (no `--workflow`), the scheduler also **subscribes** to the events queue (by default the queue named `events` in the backbone config). Messages are expected to be JSON with `event_type` and optional `payload`. Any workflow whose trigger is `event(<name>)` with `<name>` equal to `event_type` is run with that payload as initial input. See [workflow-engine.md](workflow-engine.md) for trigger types and payload shape.
+
 Example (DAOF is intended to be used via the CLI; this example is for reference or integration use):
 
 ```ts

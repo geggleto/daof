@@ -10,6 +10,8 @@ import { createSentimentAnalyzerInstance } from "./sentiment_analyzer.js";
 import { createXPosterInstance } from "./x_poster.js";
 import { createMetricsFetcherInstance } from "./metrics_fetcher.js";
 import { createFileUploaderInstance } from "./file_uploader.js";
+import { createTweetPostRecordInstance } from "./tweet_post_record.js";
+import { createTweetMetricsProcessorInstance } from "./tweet_metrics_processor.js";
 
 export type BundledCapabilityFactory = (
   capabilityId: string,
@@ -27,6 +29,8 @@ const registry: Record<string, BundledCapabilityFactory> = {
   x_poster: createXPosterInstance,
   metrics_fetcher: createMetricsFetcherInstance,
   file_uploader: createFileUploaderInstance,
+  tweet_post_record: createTweetPostRecordInstance,
+  tweet_metrics_processor: createTweetMetricsProcessorInstance,
 };
 
 /**

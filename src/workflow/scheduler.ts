@@ -95,3 +95,70 @@ export async function onHeartbeatRunDueWorkflows(
     }
   }
 }
+
+const DEFAULT_EVENTS_QUEUE = "events";
+
+function getEventsQueueName(runtime: OrgRuntime): string {
+  const queues = runtime.config.backbone?.config?.queues;
+  if (Array.isArray(queues)) {
+    const named = queues.find((q) => q?.name === DEFAULT_EVENTS_QUEUE);
+    if (named) return named.name;
+    if (queues[0] && typeof queues[0].name === "string") return queues[0].name;
+  }
+  return DEFAULT_EVENTS_QUEUE;
+}
+
+/**
+ * Subscribe to the backbone events queue and run workflows whose trigger matches the received event_type.
+ * Uses the same semaphore and run registry as cron so concurrency and daof kill apply.
+ * Returns a promise that resolves to a stop function (unsubscribe).
+ */
+export async function startEventSubscriber(
+  runtime: OrgRuntime,
+  semaphore: WorkflowSemaphore,
+  runRegistry: RunRegistry | null
+): Promise<() => void> {
+  if (!runtime.backbone) return () => {};
+
+  const queueName = getEventsQueueName(runtime);
+
+  const handler = async (raw: string) => {
+    let data: { event_type?: string; payload?: Record<string, unknown> };
+    try {
+      data = JSON.parse(raw) as { event_type?: string; payload?: Record<string, unknown> };
+    } catch {
+      return;
+    }
+    const eventType = typeof data.event_type === "string" ? data.event_type : "";
+    const payload = data.payload && typeof data.payload === "object" ? data.payload : {};
+    if (!eventType) return;
+
+    const workflows = runtime.config.workflows;
+    for (const [workflowId, workflow] of Object.entries(workflows)) {
+      let parsed;
+      try {
+        parsed = parseTrigger(workflow.trigger);
+      } catch {
+        continue;
+      }
+      if (parsed.type !== "event" || parsed.eventName !== eventType) continue;
+
+      const acquired = await semaphore.acquire();
+      if (!acquired) continue;
+
+      try {
+        const initialInput: Record<string, import("../types/json.js").JsonValue> = {
+          ...payload,
+          __event_id: randomUUID(),
+        };
+        await runWorkflow(runtime, workflowId, initialInput, { runRegistry });
+      } catch (err) {
+        console.error("[scheduler] event workflow error:", err);
+      } finally {
+        await semaphore.release();
+      }
+    }
+  };
+
+  return runtime.backbone.subscribe(queueName, handler);
+}

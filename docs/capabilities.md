@@ -79,6 +79,15 @@ Capabilities that call external HTTP APIs use **config-based authentication** vi
 
 Bundled capabilities that support auth: **ImageGenerator**, **TextGenerator**, **SentimentAnalyzer**, **XPoster**, **MetricsFetcher**, **WebhookNotifier** (optional auth for outbound POST).
 
+### XPoster (Twitter API v2 SDK)
+
+The **x_poster** capability uses the [twitter-api-v2](https://www.npmjs.com/package/twitter-api-v2) SDK to post tweets via the Twitter API v2. It does not use the generic HTTP auth registry; credentials are supplied in the capability **config** and resolved with `env(VAR)` at bootstrap.
+
+- **Input:** `content` (required), `media_urls?` (optional; media support may be added later).
+- **Output:** `{ post_id }` on success, or `{ ok: false, error }` on failure.
+- **Config (OAuth 1.0a):** For real posting, set all four (use `env(...)` for secrets): `app_key`, `app_secret`, `access_token`, `access_token_secret`. These correspond to your Twitter app consumer key/secret and the user access token/secret. If any credential is missing or empty, the capability returns `{ post_id: "stub" }` without calling the API.
+- **Config (dry-run):** Set `dry_run: true` (or `dry_run: env(DRY_RUN)` with `DRY_RUN=true`) to run the workflow without posting to X. The capability validates input and returns `{ post_id: "dry-run", dry_run: true }` without calling the Twitter API.
+
 ---
 
 ## Skill runner

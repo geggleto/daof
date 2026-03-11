@@ -1,0 +1,154 @@
+# example3: 5 jokes → Content Editor picks one → echo to CLI + post to X (Twitter SDK v2)
+# Validate: daof validate org.yaml
+# Run: daof run org.yaml   (set CURSOR_API_KEY; optional TWITTER_* for real posts)
+
+version: "1.0"
+org:
+  name: Example3
+  description: 5 jokes, editor picks one, publish to CLI and post to X
+  goals:
+    - generate_and_publish_jokes
+    - post_to_x
+
+agents:
+  content_writer:
+    provider: cursor
+    model: auto
+    role: "Content Writer"
+    description: Generates jokes
+    capabilities:
+      - name: text_generator
+  content_editor:
+    provider: cursor
+    model: auto
+    role: "Content Editor"
+    description: Picks the best joke to publish
+    capabilities:
+      - name: text_generator
+  publisher:
+    provider: cursor
+    model: auto
+    role: "Publisher"
+    description: Echoes the chosen joke to CLI and posts to X
+    capabilities:
+      - name: logger
+      - name: x_poster
+      - name: tweet_post_store
+      - name: event_emitter
+  recorder:
+    provider: cursor
+    model: auto
+    role: "Recorder"
+    description: Builds tweet post record and records URL for metrics
+    capabilities:
+      - name: tweet_post_record
+  data_analyst:
+    provider: cursor
+    model: auto
+    role: "Data Analyst"
+    description: Processes tweet_posted events and fetches metrics for real URLs
+    capabilities:
+      - name: tweet_post_store
+      - name: tweet_metrics_processor
+
+capabilities:
+  text_generator:
+    type: tool
+    description: Generate text via Cursor (uses runContext.agentLlm when no config.endpoint)
+  logger:
+    type: tool
+    description: Log messages to console (used for publishing to CLI)
+  x_poster:
+    type: tool
+    description: Post to X via Twitter API v2 SDK (returns stub when credentials omitted)
+    config:
+      # Set to true (or env(DRY_RUN) with DRY_RUN=true) to skip posting; returns post_id: "dry-run"
+      dry_run: true
+      app_key: env(TWITTER_APP_KEY)
+      app_secret: env(TWITTER_APP_SECRET)
+      access_token: env(TWITTER_ACCESS_TOKEN)
+      access_token_secret: env(TWITTER_ACCESS_TOKEN_SECRET)
+  tweet_post_store:
+    type: tool
+    description: Shared store for last posted tweet (url, post_id, dry_run)
+    persistence: redis
+  event_emitter:
+    type: tool
+    description: Publish events to backbone for event-driven workflows
+    config:
+      queue: events
+  tweet_post_record:
+    type: tool
+    description: Builds { url, post_id, dry_run } with stub URL when dry-run/stub
+  metrics_fetcher:
+    type: tool
+    description: Fetch metrics for a post (stub returns views/likes 0 when no endpoint)
+  tweet_metrics_processor:
+    type: tool
+    description: Skips when dry_run/stub; otherwise calls metrics_fetcher for post_id
+    depends_on:
+      - metrics_fetcher
+
+workflows:
+  jokes_then_publish:
+    trigger: cron(* * * * *)
+    description: Generate 5 jokes, editor picks one, echo to CLI and post to X
+    steps:
+      - agent: content_writer
+        action: text_generator
+        params:
+          prompt: "Tell 5 short jokes, numbered 1 to 5, one per line."
+          max_tokens: 400
+      - agent: content_editor
+        action: text_generator
+        params:
+          prompt: "Here are 5 jokes:\n{{ content_writer.text }}\n\nPick the single best one to publish. Reply with ONLY that joke, nothing else."
+          max_tokens: 150
+      - agent: publisher
+        action: logger
+        params:
+          level: "info"
+          message: "{{ content_editor.text }}"
+      - agent: publisher
+        action: x_poster
+        params:
+          content: "{{ content_editor.text }}"
+      - agent: recorder
+        action: tweet_post_record
+        params:
+          post_id: "{{ publisher.post_id }}"
+          dry_run: "{{ publisher.dry_run }}"
+      - agent: publisher
+        action: tweet_post_store
+        params:
+          operation: set
+          key: last_post
+          value:
+            url: "{{ recorder.url }}"
+            post_id: "{{ recorder.post_id }}"
+            dry_run: "{{ recorder.dry_run }}"
+      - agent: publisher
+        action: event_emitter
+        params:
+          event_type: tweet_posted
+          payload:
+            url: "{{ recorder.url }}"
+            post_id: "{{ recorder.post_id }}"
+            dry_run: "{{ recorder.dry_run }}"
+  process_tweet_metrics:
+    trigger: event(tweet_posted)
+    description: Data-analyst picks up tweet_posted event; processes real URLs (skips dry-run/stub)
+    steps:
+      - agent: data_analyst
+        action: tweet_metrics_processor
+        params:
+          post_id: "{{ __initial.post_id }}"
+          dry_run: "{{ __initial.dry_run }}"
+
+backbone:
+  type: redis
+  config:
+    url: redis://localhost:6379
+    queues:
+      - name: events
+        type: pubsub
