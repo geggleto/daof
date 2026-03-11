@@ -1,0 +1,13 @@
+# Local Redis for DAOF (backbone). No auth — for local development only.
+# Start: docker compose up -d
+# Stop:  docker compose down
+#
+# For production or hosted Redis (Upstash, Redis Cloud, etc.), set the backbone
+# URL in your org manifest (e.g. env-resolved or direct URL) instead of using this.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # No command = default Redis, no password (suitable for local)

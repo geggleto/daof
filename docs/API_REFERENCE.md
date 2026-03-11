@@ -1,0 +1,792 @@
+# API Reference — Full type and signature map
+
+This document lists the public API of the DAOF codebase with full TypeScript-style types and return types. Use it for precise reasoning about parameters, return values, and type shapes. Module-by-module, by area.
+
+---
+
+## 1. Parser / Config / Types
+
+### src/types/json.ts
+
+**Types**
+
+```ts
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+type ParsedYaml = JsonValue;
+
+type CapabilityInput = Record<string, JsonValue>;
+
+type CapabilityOutput = Record<string, JsonValue>;
+
+interface CapabilityInstance {
+  execute(
+    input: CapabilityInput,
+    runContext?: RunContext
+  ): Promise<CapabilityOutput>;
+}
+```
+
+**Exports**
+
+- `JsonValue` — recursive JSON-serializable value
+- `ParsedYaml` — same shape as JsonValue; raw YAML parse result
+- `CapabilityInput` — input to a capability execute call
+- `CapabilityOutput` — output from a capability execute call
+- `CapabilityInstance` — interface with `execute(input, runContext?) => Promise<CapabilityOutput>`
+- `JsonValueSchema` — `z.ZodType<JsonValue>` (Zod schema)
+
+---
+
+### src/parser/index.ts
+
+**Functions**
+
+```ts
+function loadYaml(filePath: string): ParsedYaml;
+
+function validate(raw: ParsedYaml): OrgConfig;
+```
+
+- `loadYaml` — load and parse a YAML file; no env resolution
+- `validate` — validate raw parsed YAML against manifest schema; throws ZodError on invalid; re-exports schema validate
+
+---
+
+### src/config/resolve-env.ts
+
+**Functions**
+
+```ts
+function resolveEnv(config: OrgConfig): OrgConfig;
+```
+
+- `resolveEnv` — return a copy of config with all `env(VAR_NAME)` string values replaced by `process.env[VAR_NAME]`
+
+---
+
+## 2. Schema
+
+### src/schema/index.ts
+
+**Types (Zod-inferred)**
+
+```ts
+type CapabilityDefinition = z.infer<typeof CapabilityDefinitionSchema>;
+type AgentConfig = z.infer<typeof AgentSchema>;
+type SequentialStep = z.infer<typeof SequentialStepSchema>;
+type ParallelStep = z.infer<typeof ParallelStepSchema>;
+type WorkflowConfig = z.infer<typeof WorkflowSchema>;
+type SchedulerConfig = z.infer<typeof SchedulerSchema>;
+type BackboneConfig = z.infer<typeof BackboneSchema>;
+type OrgConfig = z.infer<typeof OrgSchema>;
+```
+
+**Constants**
+
+```ts
+const DEFAULT_HEARTBEAT_INTERVAL_SECONDS: number;  // 60
+const DEFAULT_MAX_CONCURRENT_WORKFLOWS: number;    // 1
+```
+
+**Functions**
+
+```ts
+function validate(raw: ParsedYaml): OrgConfig;
+```
+
+**Exports**
+
+- `OrgSchema` — Zod schema for the org root
+- All types above; `validate(raw)` parses and returns `OrgConfig` or throws
+
+---
+
+## 3. Runtime
+
+### src/runtime/bootstrap.ts
+
+**Types**
+
+```ts
+interface OrgRuntime {
+  config: OrgConfig;
+  capabilities: Map<string, CapabilityInstance>;
+  agents: Map<string, Agent>;
+  backbone?: BackboneAdapter;
+  checkpointStore?: CheckpointStore;
+  capabilityStore?: CapabilityStore;
+}
+```
+
+**Functions**
+
+```ts
+function bootstrap(config: OrgConfig): OrgRuntime;
+
+function connectBackbone(runtime: OrgRuntime): Promise<void>;
+```
+
+- `bootstrap` — resolve env refs, load capabilities, bootstrap agents; does not connect backbone
+- `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; for Redis also sets `checkpointStore` and `capabilityStore`
+
+---
+
+### src/runtime/run-context.ts
+
+**Types**
+
+```ts
+interface AgentLlm {
+  provider: string;
+  model: string;
+  apiKey?: string;
+}
+
+interface RunContext {
+  backbone?: BackboneAdapter;
+  invokeCapability?(capabilityId: string, input?: CapabilityInput): Promise<CapabilityOutput>;
+  capabilityStore?: CapabilityStore;
+  /** Current agent's provider/model/API key for LLM calls; passed from executor, inherited in nested invocations. */
+  agentLlm?: AgentLlm;
+}
+
+interface RunContextFactoryDeps {
+  config: OrgConfig;
+  capabilities: Map<string, CapabilityInstance>;
+  backbone?: BackboneAdapter;
+  capabilityStore?: CapabilityStore;
+}
+```
+
+**Functions**
+
+```ts
+function createRunContext(
+  deps: RunContextFactoryDeps,
+  currentCapabilityId: string,
+  agentLlm?: AgentLlm
+): RunContext;
+```
+
+---
+
+## 4. Workflow
+
+### src/workflow/types.ts
+
+**Types**
+
+```ts
+type WorkflowContext = Record<string, CapabilityOutput>;
+
+interface WorkflowRunResult {
+  success: boolean;
+  context: WorkflowContext;
+  error?: Error;
+}
+
+interface CronTrigger {
+  type: "cron";
+  expression: string;
+}
+
+interface EventTrigger {
+  type: "event";
+  eventName: string;
+}
+
+type ParsedTrigger = CronTrigger | EventTrigger;
+```
+
+**Class**
+
+```ts
+class WorkflowCancelledError extends Error {
+  readonly runId: string;
+  constructor(runId: string);
+}
+```
+
+---
+
+### src/workflow/trigger.ts
+
+**Functions**
+
+```ts
+function parseTrigger(trigger: string): ParsedTrigger;
+```
+
+- Throws on unsupported trigger format. Accepts `cron(<expression>)` and `event(<eventName>)`.
+
+---
+
+### src/workflow/context.ts
+
+**Functions**
+
+```ts
+function resolveTemplate(context: WorkflowContext, str: string): string;
+
+function resolveParams(context: WorkflowContext, params: Record<string, JsonValue>): CapabilityInput;
+
+function evaluateCondition(context: WorkflowContext, condition: string): boolean;
+```
+
+---
+
+### src/workflow/executor.ts
+
+**Types**
+
+```ts
+interface RunWorkflowOptions {
+  circuitBreaker?: CircuitBreaker;
+  runRegistry?: RunRegistry | null;
+}
+```
+
+**Functions**
+
+```ts
+function executeStep(
+  runtime: OrgRuntime,
+  step: SequentialStep | ParallelStep,
+  context: WorkflowContext
+): Promise<WorkflowContext>;
+
+function executeParallelStep(
+  runtime: OrgRuntime,
+  step: ParallelStep,
+  context: WorkflowContext
+): Promise<WorkflowContext>;
+
+function runWorkflow(
+  runtime: OrgRuntime,
+  workflowId: string,
+  initialInput?: CapabilityInput,
+  options?: RunWorkflowOptions
+): Promise<WorkflowRunResult>;
+```
+
+---
+
+### src/workflow/langgraph-runner.ts
+
+**Types**
+
+```ts
+interface LangGraphRunOptions {
+  circuitBreaker?: CircuitBreaker;
+  runRegistry?: RunRegistry | null;
+}
+```
+
+**Functions**
+
+```ts
+function runWorkflowWithLangGraph(
+  runtime: OrgRuntime,
+  workflowId: string,
+  initialInput?: CapabilityInput,
+  runId?: string,
+  options?: LangGraphRunOptions
+): Promise<WorkflowRunResult>;
+```
+
+---
+
+### src/workflow/graph-builder.ts
+
+**Functions**
+
+```ts
+function buildWorkflowGraph(
+  runtime: OrgRuntime,
+  workflow: WorkflowConfig,
+  runRegistry?: RunRegistry | null
+): StateGraph<typeof WorkflowStateAnnotation, WorkflowState, WorkflowStateUpdate, string>;
+```
+
+- Returns a LangGraph `StateGraph`; when `runRegistry` is provided, nodes check for cancellation between steps.
+
+---
+
+### src/workflow/langgraph-state.ts
+
+**Exports**
+
+```ts
+const WorkflowStateAnnotation: AnnotationRoot<{ context: ... }>;
+type WorkflowState = (typeof WorkflowStateAnnotation)["State"];
+type WorkflowStateUpdate = (typeof WorkflowStateAnnotation)["Update"];
+```
+
+- Single channel `context` (WorkflowContext) with reducer merge.
+
+---
+
+### src/workflow/scheduler.ts
+
+**Types**
+
+```ts
+interface HeartbeatPayload {
+  event_id: string;
+  at: number;
+}
+```
+
+**Functions**
+
+```ts
+function startHeartbeat(
+  runtime: OrgRuntime,
+  onHeartbeat: (payload: HeartbeatPayload) => void | Promise<void>
+): () => void;
+
+function onHeartbeatRunDueWorkflows(
+  runtime: OrgRuntime,
+  payload: HeartbeatPayload,
+  semaphore: WorkflowSemaphore,
+  runRegistry: RunRegistry | null
+): Promise<void>;
+```
+
+- `startHeartbeat` — returns a stop function (clearInterval).
+- `onHeartbeatRunDueWorkflows` — finds cron workflows that are due, acquires semaphore, runs workflow with event_id, releases in finally.
+
+---
+
+### src/workflow/cron-due.ts
+
+**Functions**
+
+```ts
+function isCronDue(expression: string, date?: Date): boolean;
+```
+
+- Returns true if the cron expression would fire in the current minute of the given date (default now).
+
+---
+
+## 5. Backbone
+
+### src/backbone/types.ts
+
+**Types**
+
+```ts
+type BackbonePayload = Record<string, JsonValue> | string;
+
+interface BackboneAdapter {
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  publish(queueName: string, payload: BackbonePayload): Promise<void>;
+  subscribe(
+    queueName: string,
+    handler: (payload: string) => void | Promise<void>
+  ): Promise<() => void>;
+}
+```
+
+---
+
+### src/backbone/factory.ts
+
+**Functions**
+
+```ts
+function createBackbone(config: BackboneConfig): BackboneAdapter;
+```
+
+- Throws for `rabbitmq` and `kafka` (not implemented). Redis returns adapter from `createRedisAdapter`.
+
+---
+
+### src/backbone/redis-adapter.ts
+
+**Functions**
+
+```ts
+function createRedisAdapter(config: BackboneConfig): BackboneAdapter;
+```
+
+- Requires `config.type === "redis"`. Uses PUBLISH/SUBSCRIBE for pubsub queues, LPUSH/BRPOP for fifo.
+
+---
+
+### src/backbone/semaphore.ts
+
+**Types**
+
+```ts
+interface WorkflowSemaphore {
+  acquire(): Promise<boolean>;
+  release(): Promise<void>;
+}
+```
+
+**Functions**
+
+```ts
+function createRedisWorkflowSemaphore(
+  redisUrl: string,
+  maxConcurrent: number
+): WorkflowSemaphore;
+
+function createInMemoryWorkflowSemaphore(maxConcurrent: number): WorkflowSemaphore;
+```
+
+---
+
+### src/backbone/run-registry.ts
+
+**Types**
+
+```ts
+interface RunRegistry {
+  register(runId: string): Promise<void>;
+  unregister(runId: string): Promise<void>;
+  isCancelled(runId: string): Promise<boolean>;
+}
+
+interface RunRegistryCancel {
+  requestCancel(runId: string): Promise<void>;
+}
+```
+
+**Functions**
+
+```ts
+function createRedisRunRegistry(redisUrl: string): RunRegistry & RunRegistryCancel;
+```
+
+---
+
+### src/backbone/checkpoint-store.ts
+
+**Constants**
+
+```ts
+const CHECKPOINT_KEY_PREFIX: string;  // "daof:checkpoint:"
+const CAPABILITY_KEY_PREFIX: string;  // "daof:capability:"
+```
+
+**Types**
+
+```ts
+interface CheckpointStore {
+  save(
+    workflowId: string,
+    runId: string,
+    stepIndex: number,
+    context: WorkflowContext
+  ): Promise<void>;
+  load(
+    workflowId: string,
+    runId: string,
+    stepIndex: number
+  ): Promise<WorkflowContext | null>;
+}
+```
+
+**Functions**
+
+```ts
+function createRedisCheckpointStore(redisUrl: string): CheckpointStore;
+```
+
+---
+
+### src/backbone/capability-store.ts
+
+**Types**
+
+```ts
+interface CapabilityStore {
+  get(key: string): Promise<JsonValue | null>;
+  set(key: string, value: JsonValue): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+```
+
+**Functions**
+
+```ts
+function createScopedCapabilityStore(
+  capabilityId: string,
+  underlying: CapabilityStore
+): CapabilityStore;
+
+function createRedisCapabilityStore(redisUrl: string): CapabilityStore;
+```
+
+---
+
+## 6. Capabilities
+
+### src/capabilities/load.ts
+
+**Functions**
+
+```ts
+function loadCapabilities(config: OrgConfig): Map<string, CapabilityInstance>;
+```
+
+- Throws if any capability has `source` (repo-pulled not supported). Uses bundled, skill runner, or inline-tool adapter.
+
+---
+
+### src/capabilities/types.ts
+
+Re-exports: `CapabilityInstance`, `CapabilityInput`, `CapabilityOutput` from `../types/json.js`.
+
+---
+
+### src/capabilities/adapters/inline-tool.ts
+
+**Functions**
+
+```ts
+function createInlineToolInstance(
+  capabilityId: string,
+  def: CapabilityDefinition
+): CapabilityInstance;
+```
+
+- If config has `endpoint`, uses HTTP POST; otherwise stub that echoes input.
+
+---
+
+### src/capabilities/auth/types.ts
+
+**Types**
+
+```ts
+interface AuthStrategy {
+  getHeaders(config: Record<string, JsonValue>): Record<string, string>;
+}
+```
+
+---
+
+### src/capabilities/auth/registry.ts
+
+**Functions**
+
+```ts
+function getAuthStrategy(name: string): AuthStrategy | undefined;
+
+function getAuthHeaders(
+  strategyName: string,
+  config: Record<string, JsonValue>
+): Record<string, string>;
+
+function getAuthHeadersFromCapabilityConfig(
+  config: Record<string, JsonValue> | undefined
+): Record<string, string>;
+```
+
+- Registered strategies: `bearer`, `api_key`, `basic`.
+
+---
+
+### src/capabilities/bundled/index.ts
+
+**Types**
+
+```ts
+type BundledCapabilityFactory = (
+  capabilityId: string,
+  def: CapabilityDefinition
+) => CapabilityInstance;
+```
+
+**Constants**
+
+```ts
+const BUNDLED_IDS: Set<string>;
+```
+
+**Functions**
+
+```ts
+function getBundledCapability(
+  capabilityId: string,
+  def: CapabilityDefinition
+): CapabilityInstance | undefined;
+```
+
+- Bundled ids include: logger, event_emitter, webhook_notifier, key_value_store, image_generator, text_generator, sentiment_analyzer, x_poster, metrics_fetcher, file_uploader, plus skill_runner for type "skill".
+
+---
+
+## 7. Providers
+
+### src/providers/registry.ts
+
+Provider definitions are code-only (no YAML). MVP: Cursor only; API key from `CURSOR_API_KEY` env var.
+
+**Types**
+
+```ts
+interface ProviderDefinition {
+  id: string;
+  apiKeyEnvVar: string;
+}
+```
+
+**Constants**
+
+```ts
+const KNOWN_PROVIDER_IDS: string[];
+```
+
+**Functions**
+
+```ts
+function isKnownProvider(id: string): boolean;
+
+function getProvider(id: string): ProviderDefinition | undefined;
+
+function getProviderApiKey(providerId: string): string | undefined;
+```
+
+- `isKnownProvider` — true if the id is in the registry (e.g. `"cursor"`).
+- `getProvider` — returns the provider definition or undefined.
+- `getProviderApiKey` — returns `process.env[provider.apiKeyEnvVar]` when provider exists.
+
+---
+
+## 8. Agents
+
+### src/agents/agent.ts
+
+**Types**
+
+```ts
+interface Agent {
+  readonly id: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly role: string;
+  readonly fallback: string | undefined;
+  readonly maxConcurrentTasks: number | undefined;
+  invoke(
+    action: string,
+    input?: CapabilityInput,
+    runContext?: RunContext
+  ): Promise<CapabilityOutput>;
+}
+```
+
+**Functions**
+
+```ts
+function createAgent(
+  id: string,
+  provider: string,
+  model: string,
+  role: string,
+  capabilities: Map<string, CapabilityInstance>,
+  fallback: string | undefined,
+  maxConcurrentTasks: number | undefined
+): Agent;
+```
+
+---
+
+### src/agents/bootstrap.ts
+
+**Functions**
+
+```ts
+function bootstrapAgents(
+  config: OrgConfig,
+  capabilities: Map<string, CapabilityInstance>
+): Map<string, Agent>;
+```
+
+---
+
+## 9. Fault
+
+### src/fault/circuit-breaker.ts
+
+**Constants**
+
+```ts
+const DEFAULT_FAILURE_THRESHOLD: number;  // 5
+const DEFAULT_TIMEOUT_MS: number;         // 30000
+```
+
+**Functions**
+
+```ts
+function createAppCircuitBreaker(options?: {
+  failureThreshold?: number;
+  timeoutMs?: number;
+  windowSizeMs?: number;
+}): CircuitBreaker;
+```
+
+- `CircuitBreaker` from `p-circuit-breaker`. When circuit opens, `execute()` throws.
+
+---
+
+## 10. CLI
+
+### src/cli/pidfile.ts
+
+**Functions**
+
+```ts
+function getPidFilePath(pidFileOption?: string): string;
+
+function isProcessAlive(pid: number): boolean;
+
+function readPidFile(path: string): number | null;
+
+function writePidFile(path: string): void;
+
+function removePidFile(path: string): void;
+
+function checkAlreadyRunning(pidFilePath: string): void;
+```
+
+- `checkAlreadyRunning` — if PID file exists and process is alive, logs error and `process.exit(1)`.
+
+---
+
+## 11. Package entry (src/index.ts)
+
+**Exports**
+
+```ts
+export { loadYaml, validate } from "./parser/index.js";
+export { bootstrap, connectBackbone } from "./runtime/bootstrap.js";
+export type { OrgConfig } from "./schema/index.js";
+export type { OrgRuntime } from "./runtime/bootstrap.js";
+export type { RunContext } from "./runtime/run-context.js";
+export type { BackboneAdapter, BackbonePayload } from "./backbone/types.js";
+export { createBackbone } from "./backbone/factory.js";
+export type { RunWorkflowOptions } from "./workflow/executor.js";
+export { createAppCircuitBreaker } from "./fault/circuit-breaker.js";
+export type {
+  CapabilityInput,
+  CapabilityInstance,
+  CapabilityOutput,
+  JsonValue,
+  ParsedYaml,
+} from "./types/json.js";
+```
+
+- No `runWorkflow` re-export from the package; use workflow/executor or scheduler for run/orchestration. CLI and scheduler import from workflow and backbone directly. For MVP, the supported usage is the CLI; the package exports are available for integration or tooling.

@@ -1,0 +1,98 @@
+import type { CircuitBreaker } from "p-circuit-breaker";
+import { MemorySaver } from "@langchain/langgraph";
+import type { OrgRuntime } from "../runtime/bootstrap.js";
+import type { CapabilityInput } from "../types/json.js";
+import type { WorkflowRunResult, WorkflowContext } from "./types.js";
+import { buildWorkflowGraph } from "./graph-builder.js";
+import type { RunRegistry } from "../backbone/run-registry.js";
+
+export interface LangGraphRunOptions {
+  circuitBreaker?: CircuitBreaker;
+  runRegistry?: RunRegistry | null;
+}
+
+function generateRunId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Run a workflow using LangGraph. Builds a StateGraph from the workflow definition,
+ * compiles with a checkpointer (MemorySaver), and invokes with thread_id for
+ * persistence and resume. When runRegistry is set, registers the run for kill
+ * and checks cancel between steps. Passes __event_id and __run_id in context for traceability.
+ */
+export async function runWorkflowWithLangGraph(
+  runtime: OrgRuntime,
+  workflowId: string,
+  initialInput?: CapabilityInput,
+  runId?: string,
+  options?: LangGraphRunOptions
+): Promise<WorkflowRunResult> {
+  const workflow = runtime.config.workflows[workflowId];
+  if (!workflow) {
+    throw new Error(`Workflow not found: ${workflowId}`);
+  }
+
+  const id = runId ?? generateRunId();
+  const threadId = `${workflowId}:${id}`;
+  const runRegistry = options?.runRegistry ?? null;
+
+  const initialWithIds = {
+    ...(initialInput && typeof initialInput === "object" ? initialInput : {}),
+    __run_id: id,
+  };
+  const initialContext: WorkflowContext = { __initial: initialWithIds as WorkflowContext[string] };
+
+  if (runRegistry) {
+    await runRegistry.register(id);
+  }
+
+  const graphBuilder = buildWorkflowGraph(runtime, workflow, runRegistry);
+  const checkpointer = new MemorySaver();
+  const compiled = graphBuilder.compile({ checkpointer });
+
+  const invoke = async () => {
+    const result = await compiled.invoke(
+      { context: initialContext },
+      { configurable: { thread_id: threadId, run_id: id } }
+    );
+    return result as { context: WorkflowContext };
+  };
+
+  try {
+    const finalState = options?.circuitBreaker
+      ? await options.circuitBreaker.execute(invoke)
+      : await invoke();
+
+    if (finalState === undefined) {
+      throw new Error("Circuit breaker returned undefined");
+    }
+
+    const finalContext = finalState.context ?? {};
+    if (runtime.checkpointStore && workflow.steps.length > 0) {
+      await runtime.checkpointStore.save(
+        workflowId,
+        id,
+        workflow.steps.length - 1,
+        finalContext
+      );
+    }
+
+    return {
+      success: true,
+      context: finalContext,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      context: initialContext,
+      error: err instanceof Error ? err : new Error(String(err)),
+    };
+  } finally {
+    if (runRegistry) {
+      await runRegistry.unregister(id);
+    }
+  }
+}

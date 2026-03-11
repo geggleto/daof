@@ -1,0 +1,43 @@
+# example1: content writer generates one joke per minute via Cursor + text_generator
+# Validate: daof validate org.yaml
+# Run: daof run org.yaml   (set CURSOR_API_KEY)
+
+version: "1.0"
+org:
+  name: Example1
+  description: Minimal org — one agent, one workflow, Cursor + text_generator
+  goals:
+    - generate_jokes
+
+agents:
+  content_writer:
+    provider: cursor
+    model: auto
+    role: "Content Writer"
+    description: Generates jokes
+    capabilities:
+      - name: text_generator
+
+capabilities:
+  text_generator:
+    type: tool
+    description: Generate text via Cursor (uses runContext.agentLlm when no config.endpoint)
+
+workflows:
+  joke_every_minute:
+    trigger: cron(* * * * *)
+    description: Generate one joke per minute
+    steps:
+      - agent: content_writer
+        action: text_generator
+        params:
+          prompt: "Tell one short joke."
+          max_tokens: 150
+
+backbone:
+  type: redis
+  config:
+    url: redis://localhost:6379
+    queues:
+      - name: events
+        type: pubsub

@@ -1,0 +1,131 @@
+# Dependencies and Package Manager Files
+node_modules/
+.pnpm-store/
+.pnp/
+.pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# since we use pnpm, ignore the lock files from other package managers so they don't get accidentally committed
+package-lock.json
+yarn.lock
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build and Output Directories
+dist/
+build/
+out/
+.next/
+**/build/
+**/.next/
+**/dist/
+**/.prisma/
+**/storybook-static/
+
+# Testing and Debug
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Development Tools
+.turbo/
+.vercel/
+.data/
+.husky/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Editor and IDE
+.idea/
+.vscode/
+
+# Notes and Other Local Files
+.notes/
+
+# System Files
+.DS_Store
+*.pem
+
+# Testing
+.shortest
+.shortest/**
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/playwright/.cache/
+.nyc_output/
+
+# Prisma generated client directory 
+packages/prisma/generated/
+
+
+####### GOLANG #######
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+
+
+# Editor/IDE
+# .idea/
+# .vscode/
+
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Cloud SQL Proxy
+cloud-sql-proxy
+
+# PostHog upload script temporary directories
+temp_batch_*/
+
+# Certificates
+certificates
+
+# Local Environment Files
+.env.local
+.env.*.local
+
+allocation-*.csv
+
+service-acccount.json

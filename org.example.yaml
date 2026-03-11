@@ -1,0 +1,291 @@
+# DAOF Manifest - v1.0
+# Validate with: daof validate org.example.yaml
+
+version: "1.0"
+org:
+  name: YGGMarketing
+  description: >-
+    Autonomous marketing team for YGG games. Generates content, posts to X, tracks engagement.
+  goals:
+    - maximize_organic_engagement
+    - stay_under_monthly_budget: 1500
+    - maintain_brand_compliance
+
+agents:
+  ceo:
+    provider: cursor
+    model: auto
+    role: "Chief Executive Officer"
+    description: Oversees budget, approves major strategies, monitors KPIs
+    capabilities:
+      - name: logger
+      - name: check_budget
+      - name: alert_board
+      - name: gitactor_scanner
+    fallback: ceo_backup
+    max_concurrent_tasks: 3
+
+  cmo:
+    provider: cursor
+    model: auto
+    role: "Chief Marketing Officer"
+    description: Defines per-game content strategy and asset volume
+    capabilities:
+      - name: generate_strategy
+      - name: image_gen
+      - name: gitactor_scanner
+    max_concurrent_tasks: 5
+
+  content_writer:
+    provider: cursor
+    model: auto
+    role: "Content Writer"
+    description: Generates captions, threads, blog posts
+    capabilities:
+      - name: gitactor_scanner
+      - name: text_formatter
+      - name: write_post
+
+  content_designer:
+    provider: cursor
+    model: auto
+    role: "Content Designer"
+    description: Creates images & short videos
+    capabilities:
+      - name: image_gen
+      - name: video_gen_short
+      - name: gitactor_scanner
+      - name: generate_assets
+
+  visual_qa:
+    provider: cursor
+    model: auto
+    role: "Visual Quality Assurance"
+    description: Reviews visuals for branding, errors, relevance
+    capabilities:
+      - name: gitactor_scanner
+      - name: review_assets
+
+  compliance_qa:
+    provider: cursor
+    model: auto
+    role: "Compliance & Legal QA"
+    description: Checks for IP, spoilers, brand safety, legal risk
+    capabilities:
+      - name: gitactor_scanner
+      - name: final_compliance_check
+
+  content_manager:
+    provider: cursor
+    model: auto
+    role: "Content Manager"
+    description: Assembles final posts and publishes
+    capabilities:
+      - name: post_to_x
+      - name: schedule_post
+      - name: gitactor_scanner
+      - name: assemble_and_post
+
+  data_analyst:
+    provider: cursor
+    model: auto
+    role: "Data Analyst"
+    description: Collects X metrics hourly, generates insights
+    capabilities:
+      - name: get_x_metrics
+      - name: upsert_metric
+      - name: generate_report
+      - name: collect_metrics
+
+# depends_on: optional list of capability ids this capability may call at runtime via
+# runContext.invokeCapability(capabilityId, input). Each id must exist in this capabilities map.
+capabilities:
+  logger:
+    type: tool
+    description: Log messages (bundled; console in v1)
+  event_emitter:
+    type: tool
+    description: Publish events to backbone queue (bundled)
+    config:
+      queue: events
+  webhook_notifier:
+    type: tool
+    description: HTTP POST to a webhook URL (bundled)
+
+  key_value_store:
+    type: tool
+    description: Get/set/delete by key (bundled; Redis or in-memory)
+  image_generator:
+    type: tool
+    description: Generate images via HTTP endpoint (bundled)
+    config:
+      endpoint: "https://your-flux-endpoint.hf.space"
+      api_key: env(HF_API_KEY)
+  text_generator:
+    type: tool
+    description: Generate text via LLM endpoint (bundled)
+    config:
+      endpoint: "https://api.example.com/complete"
+      api_key: env(LLM_API_KEY)
+  sentiment_analyzer:
+    type: tool
+    description: Sentiment score via endpoint (bundled)
+    config:
+      endpoint: "https://api.example.com/sentiment"
+      api_key: env(SENTIMENT_API_KEY)
+  x_poster:
+    type: tool
+    description: Post to X (bundled; stub or endpoint)
+    config:
+      endpoint: "https://api.twitter.com/2/tweets"
+      api_key: env(X_API_KEY)
+  metrics_fetcher:
+    type: tool
+    description: Fetch X/GA4 metrics (bundled)
+    config:
+      endpoint: "https://api.twitter.com/2/tweets"
+      api_key: env(X_API_KEY)
+  file_uploader:
+    type: tool
+    description: Upload file to local or S3 (bundled; S3 stub)
+    config:
+      base_path: "./uploads"
+
+  image_gen:
+    type: tool
+    description: Generate images using Hugging Face endpoint
+    config:
+      endpoint: "https://your-flux-endpoint.hf.space"
+      api_key: env(HF_API_KEY)
+      default_batch_size: 5
+      max_batch_size: 20
+    persistence: sql_events
+
+  gitactor_scanner:
+    type: tool
+    description: Security & quality scan using gitactor.dev
+    config:
+      endpoint: "http://localhost:3000/scan"
+      api_key: env(GITACTOR_API_KEY)
+      default_mode: full
+      auto_reject_threshold: 60
+    persistence: sql_events
+
+  post_to_x:
+    type: tool
+    description: Publish content to X
+    config:
+      api_key: env(X_API_KEY)
+      api_secret: env(X_API_SECRET)
+      access_token: env(X_ACCESS_TOKEN)
+      access_secret: env(X_ACCESS_SECRET)
+    rate_limit: 3 per minute
+
+  check_budget:
+    type: tool
+    description: Check budget status
+  alert_board:
+    type: tool
+    description: Alert board
+  generate_strategy:
+    type: tool
+    description: Generate content strategy
+  text_formatter:
+    type: tool
+    description: Format text
+  video_gen_short:
+    type: tool
+    description: Generate short video
+  get_x_metrics:
+    type: tool
+    description: Get X metrics
+  upsert_metric:
+    type: tool
+    description: Upsert metric
+  generate_report:
+    type: tool
+    description: Generate report
+  schedule_post:
+    type: tool
+    description: Schedule post
+  write_post:
+    type: tool
+    description: Write post
+    depends_on:
+      - text_formatter
+  generate_assets:
+    type: tool
+    description: Generate assets
+  review_assets:
+    type: tool
+    description: Review assets
+  final_compliance_check:
+    type: tool
+    description: Final compliance check
+  assemble_and_post:
+    type: tool
+    description: Assemble and post
+    depends_on:
+      - post_to_x
+  collect_metrics:
+    type: tool
+    description: Collect metrics
+
+workflows:
+  daily_content_cycle:
+    trigger: cron(0 9 * * *)
+    description: Full daily content generation & posting
+    persistence: sql_events
+    steps:
+      - agent: ceo
+        action: check_budget
+        on_failure: alert_and_halt
+      - agent: cmo
+        action: generate_strategy
+      - parallel:
+          - agent: content_writer
+            action: write_post
+          - agent: content_designer
+            action: generate_assets
+            params:
+              batch_size: "{{ cmo.recommended_variants }}"
+      - agent: visual_qa
+        action: review_assets
+      - agent: compliance_qa
+        action: final_compliance_check
+      - agent: content_manager
+        action: assemble_and_post
+        condition: "{{ visual_qa.verdict == 'approve' && compliance_qa.verdict == 'approve' }}"
+
+  hourly_metrics:
+    trigger: cron(0 * * * *)
+    description: Pull X metrics and store
+    steps:
+      - agent: data_analyst
+        action: collect_metrics
+
+backbone:
+  type: redis
+  config:
+    url: redis://localhost:6379
+    queues:
+      - name: events
+        type: pubsub
+      - name: dlq
+        type: fifo
+
+fault_tolerance:
+  health_checks_interval: 5m
+  rogue_detection:
+    - hallucination_guard
+    - output_length_limit: 4000 chars
+  retries:
+    default: 3
+    backoff: exponential
+  circuit_breaker:
+    threshold: 5 failures
+    reset_after: 10m
+  dead_letter_queue: true
+  alerts:
+    webhook: env(ALERT_WEBHOOK_URL)
+    channels: [slack, email]
