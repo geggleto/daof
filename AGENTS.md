@@ -17,7 +17,7 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 | `src/backbone/` | Redis adapter, semaphore, run registry, checkpoint/capability stores. |
 | `src/capabilities/` | Loader, adapters (inline-tool), bundled capabilities, auth. |
 | `src/agents/` | Agent type and bootstrap. |
-| `src/providers/` | Provider registry (Cursor only for MVP); API key from env (e.g. CURSOR_API_KEY). |
+| `src/providers/` | Provider registry and service layer (Cursor only for MVP); see [docs/providers.md](docs/providers.md). API key from env (e.g. CURSOR_API_KEY). |
 | `src/schema/` | Zod schemas and config types (OrgConfig, etc.). |
 | `src/fault/` | App-level circuit breaker. |
 | `src/parser/`, `src/config/`, `src/types/` | YAML loading, env resolution, JsonValue/CapabilityInput/Output. |
@@ -37,6 +37,7 @@ For the **full class and type map**, and **all exported function/interface signa
 - [docs/workflow-engine.md](docs/workflow-engine.md) — Workflow engine: types, triggers, runWorkflow, templates, conditions, scheduler, traceability, kill.
 - [docs/capabilities.md](docs/capabilities.md) — Capabilities: depends_on, invokeCapability, types, loading.
 - [docs/backbone.md](docs/backbone.md) — Backbone (queues): adapter interface, Redis, semaphore/run registry keyspaces.
+- [docs/providers.md](docs/providers.md) — Provider service layer: LLMProviderService, getProviderService, Cursor implementation.
 - [docs/authentication.md](docs/authentication.md) — Auth strategies for external capabilities.
 - [docs/verification.md](docs/verification.md) — Requirements traceability and verification.
 - [docs/prd.md](docs/prd.md), [docs/tip.md](docs/tip.md), [docs/backlog.md](docs/backlog.md) — Product and backlog context.

@@ -9,8 +9,6 @@ import { resolveEnv } from "../config/resolve-env.js";
 import { loadCapabilities } from "../capabilities/load.js";
 import { bootstrapAgents } from "../agents/bootstrap.js";
 import { createBackbone } from "../backbone/factory.js";
-import { createRedisCheckpointStore } from "../backbone/checkpoint-store.js";
-import { createRedisCapabilityStore } from "../backbone/capability-store.js";
 
 export interface OrgRuntime {
   config: OrgConfig;
@@ -41,16 +39,16 @@ export function bootstrap(config: OrgConfig): OrgRuntime {
 
 /**
  * Create backbone adapter from runtime config, connect, and attach to runtime.
- * For Redis, also creates a checkpoint store (keyspace daof:checkpoint:*).
- * No-op if config.backbone.type is not yet implemented (rabbitmq/kafka throw from createBackbone).
+ * When the adapter exposes createCheckpointStore/createCapabilityStore (e.g. Redis), attaches those to runtime.
  */
 export async function connectBackbone(runtime: OrgRuntime): Promise<void> {
   const adapter = createBackbone(runtime.config.backbone);
   await adapter.connect();
   runtime.backbone = adapter;
-  if (runtime.config.backbone.type === "redis") {
-    const url = runtime.config.backbone.config.url;
-    runtime.checkpointStore = createRedisCheckpointStore(url);
-    runtime.capabilityStore = createRedisCapabilityStore(url);
+  if (adapter.createCheckpointStore) {
+    runtime.checkpointStore = adapter.createCheckpointStore();
+  }
+  if (adapter.createCapabilityStore) {
+    runtime.capabilityStore = adapter.createCapabilityStore();
   }
 }

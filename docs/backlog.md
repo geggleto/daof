@@ -29,6 +29,21 @@ Items not in the current phase scope; to be scheduled later.
 
 ---
 
+## SOLID / maintainability (deferred)
+
+Remaining items from the SOLID violations scan; to be addressed later.
+
+- **Schema split (ISP)** — Split `src/schema/index.ts` into smaller modules (e.g. `schema/capability.ts`, `schema/workflow.ts`, `schema/org.ts`) with focused types and re-export from index for compatibility.
+- **CapabilityDefinition segregation (ISP)** — Consider union or segregated types (e.g. `ToolCapabilityDefinition`, `SkillCapabilityDefinition`) so consumers depend on a smaller shape instead of one fat type.
+- **Parser / env injection (DIP)** — Inject file reader and/or YAML parser in `src/parser/index.ts` for testability; inject env getter in `src/config/resolve-env.ts` (e.g. `(key: string) => string | undefined`) instead of using `process.env` directly.
+- **Trigger / scheduler OCP** — Make trigger handling open/closed: e.g. map `trigger type → handler` so new trigger types (e.g. webhook) register a handler without editing `src/workflow/scheduler.ts` or `parseTrigger`.
+- **Redis queue-type strategies (OCP)** — In `src/backbone/redis-adapter.ts`, delegate publish/subscribe to queue-type-specific strategies (pubsub vs fifo) so new queue types add a strategy without new branches in the adapter.
+- **Provider resolver injection (DIP)** — Optional: pass a “provider service resolver” into text_generator (e.g. via RunContext) and/or have executor receive API key from runtime instead of calling `getProviderApiKey` from the registry, so tests or alternate provider sources can inject without the global registry.
+- **x_poster abstraction (DIP)** — Introduce a small “social poster” interface; implement with Twitter SDK in one module so another implementation (e.g. Mastodon, stub) can be swapped.
+- **Auth registry (DIP)** — Have auth strategies self-register or build the registry from config so adding a new strategy doesn’t require editing `src/capabilities/auth/registry.ts`.
+
+---
+
 ## Phase 5
 
 - Docker Compose, testing polish (per TIP).

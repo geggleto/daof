@@ -134,7 +134,20 @@ function connectBackbone(runtime: OrgRuntime): Promise<void>;
 ```
 
 - `bootstrap` — resolve env refs, load capabilities, bootstrap agents; does not connect backbone
-- `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; for Redis also sets `checkpointStore` and `capabilityStore`
+- `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; when adapter exposes `createCheckpointStore`/`createCapabilityStore`, attaches those to runtime
+
+### src/runtime/run-org.ts
+
+**Functions**
+
+```ts
+function runScheduler(
+  runtime: OrgRuntime,
+  options?: RunSchedulerOptions
+): Promise<void>;
+```
+
+- `runScheduler` — starts heartbeat and event subscriber; uses `runtime.backbone?.createWorkflowSemaphore`/`createRunRegistry` when present (e.g. Redis), else in-memory semaphore and no run registry. Options: `onBeforeShutdown` (e.g. remove PID file). Resolves after setup; process stays alive until SIGINT/SIGTERM.
 
 ---
 
@@ -394,8 +407,14 @@ interface BackboneAdapter {
     queueName: string,
     handler: (payload: string) => void | Promise<void>
   ): Promise<() => void>;
+  createWorkflowSemaphore?(maxConcurrent: number): WorkflowSemaphore;
+  createRunRegistry?(): (RunRegistry & RunRegistryCancel) | null;
+  createCheckpointStore?(): CheckpointStore;
+  createCapabilityStore?(): CapabilityStore;
 }
 ```
+
+- Optional methods expose backend-specific features; callers use them when present instead of branching on `config.backbone.type`. Redis adapter implements all four.
 
 ---
 
@@ -538,10 +557,13 @@ function createRedisCapabilityStore(redisUrl: string): CapabilityStore;
 **Functions**
 
 ```ts
-function loadCapabilities(config: OrgConfig): Map<string, CapabilityInstance>;
+function loadCapabilities(
+  config: OrgConfig,
+  resolvers?: CapabilityResolver[]
+): Map<string, CapabilityInstance>;
 ```
 
-- Throws if any capability has `source` (repo-pulled not supported). Uses bundled, skill runner, or inline-tool adapter.
+- When `resolvers` is omitted, uses default (bundled, skill, inline-tool). Pass custom resolvers to plug in other capability sources. Throws if any capability has `source` (repo-pulled not supported). `CapabilityResolver`: `(id, def) => CapabilityInstance | undefined`.
 
 ---
 
@@ -631,6 +653,25 @@ function getBundledCapability(
 
 ## 7. Providers
 
+Provider execution is behind a service layer: capabilities use `LLMProviderService` and `getProviderService`; each provider (e.g. Cursor) implements the interface. See [docs/providers.md](providers.md).
+
+### src/providers/llm-provider-service.ts
+
+**Types**
+
+```ts
+interface LLMProviderService {
+  complete(
+    prompt: string,
+    options?: { max_tokens?: number }
+  ): Promise<{ text: string } | { ok: false; error: string }>;
+}
+```
+
+### src/providers/cursor-service.ts
+
+Cursor implementation of `LLMProviderService` (CLI spawn, `CURSOR_CLI_CMD`, `CURSOR_API_KEY`). Created via `createCursorProviderService(apiKey: string)`.
+
 ### src/providers/registry.ts
 
 Provider definitions are code-only (no YAML). MVP: Cursor only; API key from `CURSOR_API_KEY` env var.
@@ -658,11 +699,30 @@ function isKnownProvider(id: string): boolean;
 function getProvider(id: string): ProviderDefinition | undefined;
 
 function getProviderApiKey(providerId: string): string | undefined;
+
+function getProviderService(
+  providerId: string,
+  apiKey: string | undefined
+): LLMProviderService | undefined;
 ```
 
 - `isKnownProvider` — true if the id is in the registry (e.g. `"cursor"`).
 - `getProvider` — returns the provider definition or undefined.
 - `getProviderApiKey` — returns `process.env[provider.apiKeyEnvVar]` when provider exists.
+- `getProviderService` — returns an `LLMProviderService` for the given provider and API key (e.g. Cursor); undefined if unknown or API key missing.
+
+**Registration (data-driven)**
+
+```ts
+type ProviderServiceFactory = (apiKey: string) => LLMProviderService;
+
+function registerProviderServiceFactory(
+  providerId: string,
+  factory: ProviderServiceFactory
+): void;
+```
+
+- New providers register via `registerProviderServiceFactory` (e.g. from `src/providers/register-providers.ts`); no edit to `getProviderService` required.
 
 ---
 

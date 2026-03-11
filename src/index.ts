@@ -1,3 +1,4 @@
+import "./providers/register-providers.js";
 export { loadYaml, validate } from "./parser/index.js";
 export { bootstrap, connectBackbone } from "./runtime/bootstrap.js";
 export type { OrgConfig } from "./schema/index.js";

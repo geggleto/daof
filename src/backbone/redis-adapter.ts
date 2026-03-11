@@ -1,6 +1,10 @@
 import { Redis } from "ioredis";
 import type { BackboneAdapter, BackbonePayload } from "./types.js";
 import type { BackboneConfig } from "../schema/index.js";
+import { createRedisWorkflowSemaphore } from "./semaphore.js";
+import { createRedisRunRegistry } from "./run-registry.js";
+import { createRedisCheckpointStore } from "./checkpoint-store.js";
+import { createRedisCapabilityStore } from "./capability-store.js";
 
 function serialize(payload: BackbonePayload): string {
   return typeof payload === "string" ? payload : JSON.stringify(payload);
@@ -105,6 +109,22 @@ export function createRedisAdapter(config: BackboneConfig): BackboneAdapter {
       };
       void loop();
       return unsubscribe;
+    },
+
+    createWorkflowSemaphore(maxConcurrent: number) {
+      return createRedisWorkflowSemaphore(url, maxConcurrent);
+    },
+
+    createRunRegistry() {
+      return createRedisRunRegistry(url);
+    },
+
+    createCheckpointStore() {
+      return createRedisCheckpointStore(url);
+    },
+
+    createCapabilityStore() {
+      return createRedisCapabilityStore(url);
     },
   };
 }

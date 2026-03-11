@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "../providers/register-providers.js";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { ZodError } from "zod";
@@ -6,20 +7,15 @@ import { Command } from "commander";
 import { loadYaml, validate } from "../parser/index.js";
 import { bootstrap, connectBackbone } from "../runtime/bootstrap.js";
 import { runWorkflow } from "../workflow/executor.js";
+import { runScheduler } from "../runtime/run-org.js";
+import { createBackbone } from "../backbone/factory.js";
 import { createAppCircuitBreaker } from "../fault/circuit-breaker.js";
-import { startHeartbeat, onHeartbeatRunDueWorkflows, startEventSubscriber } from "../workflow/scheduler.js";
-import { createRedisWorkflowSemaphore, createInMemoryWorkflowSemaphore } from "../backbone/semaphore.js";
-import { createRedisRunRegistry } from "../backbone/run-registry.js";
 import {
   getPidFilePath,
   checkAlreadyRunning,
   writePidFile,
   removePidFile,
 } from "./pidfile.js";
-import {
-  DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
-  DEFAULT_MAX_CONCURRENT_WORKFLOWS,
-} from "../schema/index.js";
 
 const program = new Command();
 
@@ -103,39 +99,8 @@ runCmd.action(async (file: string) => {
       }
     }
 
-    const runOrg = async () => {
-      const heartbeatInterval =
-        runtime.config.scheduler?.heartbeat_interval_seconds ?? DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
-      const maxConcurrent =
-        runtime.config.scheduler?.max_concurrent_workflows ?? DEFAULT_MAX_CONCURRENT_WORKFLOWS;
-
-      const hasRedis = runtime.config.backbone.type === "redis";
-      const redisUrl = hasRedis ? runtime.config.backbone.config.url : "";
-      const semaphore = hasRedis
-        ? createRedisWorkflowSemaphore(redisUrl, maxConcurrent)
-        : createInMemoryWorkflowSemaphore(maxConcurrent);
-      const runRegistry = hasRedis ? createRedisRunRegistry(redisUrl) : null;
-
-      const stopHeartbeat = startHeartbeat(runtime, async (payload) => {
-        await onHeartbeatRunDueWorkflows(runtime, payload, semaphore, runRegistry);
-      });
-
-      const stopEventSubscriber = runtime.backbone
-        ? await startEventSubscriber(runtime, semaphore, runRegistry)
-        : () => {};
-
-      const shutdown = () => {
-        stopHeartbeat();
-        stopEventSubscriber();
-        if (process.env.DAOF_PID_FILE) removePidFile(process.env.DAOF_PID_FILE);
-        process.exit(0);
-      };
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
-
-      console.log(
-        `Scheduler running (heartbeat every ${heartbeatInterval}s, max ${maxConcurrent} concurrent workflow(s)). Ctrl+C to stop.`
-      );
+    const onBeforeShutdown = () => {
+      if (process.env.DAOF_PID_FILE) removePidFile(process.env.DAOF_PID_FILE);
     };
 
     if (opts.detach) {
@@ -161,7 +126,7 @@ runCmd.action(async (file: string) => {
       }
     }
 
-    await runOrg();
+    await runScheduler(runtime, { onBeforeShutdown });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Run failed:", message);
@@ -183,11 +148,13 @@ program
     try {
       const raw = loadYaml(file);
       const config = validate(raw);
-      if (config.backbone.type !== "redis") {
-        console.error("kill requires Redis backbone.");
+      const adapter = createBackbone(config.backbone);
+      await adapter.connect();
+      const registry = adapter.createRunRegistry?.();
+      if (!registry) {
+        console.error("kill requires a backbone that supports run registry (e.g. Redis).");
         process.exit(1);
       }
-      const registry = createRedisRunRegistry(config.backbone.config.url);
       await registry.requestCancel(runId);
       console.log(`Cancel requested for run ${runId}.`);
       process.exit(0);
