@@ -1,6 +1,17 @@
 # DAOF — Declarative Agentic Orchestration Framework
 
+<image-card alt="DAOF" src="https://img.shields.io/badge/DAOF-v0.1-orange" ></image-card>
+<image-card alt="License" src="https://img.shields.io/github/license/geggleto/daof" ></image-card>
+<image-card alt="Stars" src="https://img.shields.io/github/stars/geggleto/daof?style=social" ></image-card>
+<image-card alt="Forks" src="https://img.shields.io/github/forks/geggleto/daof?style=social" ></image-card>
+
+![DAOF in Action](demo.gif)
+
 ### **Build autonomous AI organizations with one YAML file.**
+
+Build autonomous AI organizations with one YAML file. No glue code. No babysitting.
+
+### Usage
 
 DAOF is used from the command line: `daof validate`, `daof run`, and `daof kill`. There is no server or library API for MVP; run everything via the `daof` CLI.
 
