@@ -1,0 +1,70 @@
+# example2: 5 jokes → Content Editor picks one → publish (echo to CLI)
+# Validate: daof validate org.yaml
+# Run: daof run org.yaml   (set CURSOR_API_KEY)
+
+version: "1.0"
+org:
+  name: Example2
+  description: 5 jokes, editor picks one, publish to CLI
+  goals:
+    - generate_and_publish_jokes
+
+agents:
+  content_writer:
+    provider: cursor
+    model: auto
+    role: "Content Writer"
+    description: Generates jokes
+    capabilities:
+      - name: text_generator
+  content_editor:
+    provider: cursor
+    model: auto
+    role: "Content Editor"
+    description: Picks the best joke to publish
+    capabilities:
+      - name: text_generator
+  publisher:
+    provider: cursor
+    model: auto
+    role: "Publisher"
+    description: Echoes the chosen joke to the CLI
+    capabilities:
+      - name: logger
+
+capabilities:
+  text_generator:
+    type: tool
+    description: Generate text via Cursor (uses runContext.agentLlm when no config.endpoint)
+  logger:
+    type: tool
+    description: Log messages to console (used for publishing to CLI)
+
+workflows:
+  jokes_then_publish:
+    trigger: cron(* * * * *)
+    description: Generate 5 jokes, editor picks one, publish to CLI
+    steps:
+      - agent: content_writer
+        action: text_generator
+        params:
+          prompt: "Tell 5 short jokes, numbered 1 to 5, one per line."
+          max_tokens: 400
+      - agent: content_editor
+        action: text_generator
+        params:
+          prompt: "Here are 5 jokes:\n{{ content_writer.text }}\n\nPick the single best one to publish. Reply with ONLY that joke, nothing else."
+          max_tokens: 150
+      - agent: publisher
+        action: logger
+        params:
+          level: "info"
+          message: "{{ content_editor.text }}"
+
+backbone:
+  type: redis
+  config:
+    url: redis://localhost:6379
+    queues:
+      - name: events
+        type: pubsub

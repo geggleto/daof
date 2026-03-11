@@ -56,10 +56,11 @@ const runCmd = program
   .argument("<file>", "Path to the org manifest YAML file")
   .option("--workflow <name>", "Workflow to run (one-shot). Omit to run the org (heartbeat + cron workflows).")
   .option("-d, --detach", "Run in background (only when not using --workflow)")
-  .option("--pid-file <path>", "PID file path when using -d (default: daof.pid in cwd)");
+  .option("--pid-file <path>", "PID file path when using -d (default: daof.pid in cwd)")
+  .option("-v, --verbose", "Increase verbosity; use -vvv to print workflow output JSON", (v: string, prev: number) => prev + 1, 0);
 
 runCmd.action(async (file: string) => {
-  const opts = runCmd.opts() as { workflow?: string; detach?: boolean; pidFile?: string };
+  const opts = runCmd.opts() as { workflow?: string; detach?: boolean; pidFile?: string; verbose?: number };
   if (opts.detach && opts.workflow) {
     console.error("-d is only valid when running the org without --workflow.");
     process.exit(1);
@@ -83,8 +84,10 @@ runCmd.action(async (file: string) => {
       });
       if (result.success) {
         console.log(`Workflow '${workflowId}' completed. Success: true.`);
-        console.log("Output:");
-        console.log(JSON.stringify(result.context, null, 2));
+        if ((opts.verbose ?? 0) >= 3) {
+          console.log("Output:");
+          console.log(JSON.stringify(result.context, null, 2));
+        }
         process.exit(0);
       } else {
         const msg = result.error?.message ?? "";
