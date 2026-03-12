@@ -125,6 +125,20 @@ agents:
     capabilities:
       - name: frontend_code_writer
       - name: logger
+  coo:
+    provider: cursor
+    model: auto
+    role: Chief Operating Officer
+    description: Evaluates performance of all agents except the CEO. Identifies
+      degraded or critical agents and upgrades their capabilities via config
+      patches or the build flow.
+    capabilities:
+      - name: fetch_agent_performance
+      - name: score_agent_performance
+      - name: recommend_upgrades
+      - name: apply_capability_upgrade
+      - name: logger
+    max_concurrent_tasks: 2
 capabilities:
   logger:
     type: tool
@@ -362,6 +376,88 @@ capabilities:
       Return the complete implementation code. Where an architectural decision
       is non-obvious, add a brief inline comment explaining the rationale.
       Separate each file with a header comment: // --- file: <relative-path> ---
+  fetch_agent_performance:
+    type: tool
+    description: 'Queries the backbone run registry, checkpoint store, and metrics
+      to collect per-agent stats: task completion count, failure count, average
+      step duration, error rate, and last-N output quality scores. Returns a
+      structured performance report per agent. Accepts an optional exclude list
+      (default: ["ceo"]).'
+    config:
+      default_exclude:
+        - ceo
+      lookback_days: 7
+    persistence: sql_events
+  score_agent_performance:
+    type: skill
+    description: Takes the raw performance report from fetch_agent_performance and
+      produces a scored evaluation for each agent (0–100) with a verdict
+      (healthy, degraded, critical) and a plain-language summary of weaknesses.
+      Uses an LLM prompt to reason over the data.
+    config:
+      endpoint: env(LLM_ENDPOINT)
+      api_key: env(LLM_API_KEY)
+    prompt: >-
+      You are a senior operations analyst. You will receive a structured
+      performance report for a set of AI agents. For each agent, produce a JSON
+      object with:
+
+        - agent_id: the agent identifier
+        - score: integer 0–100 (100 = perfect)
+        - verdict: one of "healthy", "degraded", "critical"
+        - weaknesses: array of plain-language descriptions of problems
+
+      Scoring guidelines:
+        - 80–100 healthy: low error rate (<5%), high completion rate, acceptable latency.
+        - 50–79 degraded: moderate error rate (5–20%), missed tasks, or latency spikes.
+        - 0–49 critical: high error rate (>20%), frequent failures, or stalled tasks.
+
+      == INPUT == {{ fetch_agent_performance.report }}
+
+      == OUTPUT == Return a JSON array of agent evaluation objects. No
+      commentary outside the JSON.
+    depends_on:
+      - fetch_agent_performance
+  recommend_upgrades:
+    type: skill
+    description: "Given the scored evaluation, produces a list of concrete upgrade
+      recommendations per underperforming agent: new capabilities to add,
+      capability config changes, or model upgrades. Outputs structured
+      YAML-ready recommendations."
+    config:
+      endpoint: env(LLM_ENDPOINT)
+      api_key: env(LLM_API_KEY)
+    prompt: >-
+      You are an AI operations architect. You will receive scored evaluations
+      for a set of AI agents. For every agent whose verdict is "degraded" or
+      "critical", produce upgrade recommendations.
+
+      Each recommendation must be one of:
+        1. add_capability — a new capability the agent should gain (provide id, type,
+           description, and rationale).
+        2. update_config — a config change on an existing capability (provide
+           capability_id, key, old_value, new_value, rationale).
+        3. model_upgrade — change the agent's model (provide suggested_model and
+           rationale).
+
+      == INPUT == {{ score_agent_performance.evaluations }}
+
+      == OUTPUT == Return a YAML document with top-level key "recommendations"
+      mapping agent_id to an array of recommendation objects. Include a boolean
+      field "has_recommendations" at the top level (true if any recommendations
+      exist, false otherwise).
+    depends_on:
+      - score_agent_performance
+  apply_capability_upgrade:
+    type: tool
+    description: Applies the recommended upgrades to the org manifest. For new
+      capabilities, emits a build.requested event via the backbone (leveraging
+      the existing build flow). For config or capability-list changes, directly
+      patches the org YAML and writes the file.
+    persistence: sql_events
+    depends_on:
+      - recommend_upgrades
+      - event_emitter
 workflows:
   daily_content_cycle:
     trigger: cron(0 9 * * *)
@@ -426,6 +522,53 @@ workflows:
           success: "{{ verifier.pass }}"
           prd: "{{ planner.prd }}"
           added_count: "{{ builder.added_count }}"
+  weekly_performance_review:
+    trigger: cron(0 8 * * 1)
+    description: Weekly evaluation of all non-CEO agents; score, recommend, and
+      apply upgrades for underperformers.
+    persistence: sql_events
+    steps:
+      - agent: coo
+        action: fetch_agent_performance
+        params:
+          exclude:
+            - ceo
+      - agent: coo
+        action: score_agent_performance
+      - agent: coo
+        action: recommend_upgrades
+        condition: "{{ score_agent_performance.has_degraded_or_critical == true }}"
+      - agent: coo
+        action: apply_capability_upgrade
+        condition: "{{ recommend_upgrades.has_recommendations == true }}"
+      - agent: coo
+        action: logger
+        params:
+          message: Weekly performance review complete
+          summary: "{{ apply_capability_upgrade.summary }}"
+  on_demand_performance_audit:
+    trigger: event(performance.audit.requested)
+    description: On-demand audit triggered by the CEO or external event. Same
+      evaluation pipeline but for a specific agent or all.
+    steps:
+      - agent: coo
+        action: fetch_agent_performance
+        params:
+          agents: "{{ __initial.agents }}"
+          exclude:
+            - ceo
+      - agent: coo
+        action: score_agent_performance
+      - agent: coo
+        action: recommend_upgrades
+      - agent: coo
+        action: apply_capability_upgrade
+        condition: "{{ recommend_upgrades.has_recommendations == true }}"
+      - agent: coo
+        action: logger
+        params:
+          message: On-demand performance audit complete
+          summary: "{{ apply_capability_upgrade.summary }}"
 backbone:
   type: redis
   config:
