@@ -6,6 +6,7 @@ import {
   type CapabilityStore,
   createScopedCapabilityStore,
 } from "../backbone/capability-store.js";
+import { executeCapabilityWithMiddleware } from "./middleware.js";
 
 /**
  * Agent LLM config passed into capabilities so they can call the LLM (provider, model, API key).
@@ -32,6 +33,8 @@ export interface RunContext {
   ): Promise<CapabilityOutput>;
   /** When present (e.g. Redis backbone), capabilities can get/set/delete by key. */
   capabilityStore?: CapabilityStore;
+  /** When present, shared store for agent metrics (middleware and fetch_agent_performance). */
+  metricsStore?: CapabilityStore;
   /** When present, the current agent's provider/model/API key for LLM calls. Passed from executor; nested invocations inherit it. */
   agentLlm?: AgentLlm;
 }
@@ -44,6 +47,8 @@ export interface RunContextFactoryDeps {
   capabilities: Map<string, CapabilityInstance>;
   backbone?: BackboneAdapter;
   capabilityStore?: CapabilityStore;
+  metricsStore?: CapabilityStore;
+  capabilityMiddleware?: import("./middleware.js").CapabilityMiddleware[];
 }
 
 /**
@@ -72,6 +77,16 @@ export function createRunContext(
       throw new Error(`Capability not found: ${capabilityId}`);
     }
     const nestedRunContext = createRunContext(deps, capabilityId, agentLlm);
+    const hasCapabilityMiddleware = deps.capabilityMiddleware && deps.capabilityMiddleware.length > 0;
+    if (hasCapabilityMiddleware && deps.capabilityMiddleware) {
+      return executeCapabilityWithMiddleware(
+        deps as import("./middleware.js").RuntimeWithMiddleware,
+        capabilityId,
+        target,
+        input ?? {},
+        nestedRunContext
+      );
+    }
     return target.execute(input ?? {}, nestedRunContext);
   };
 
@@ -85,6 +100,7 @@ export function createRunContext(
     ...(deps.backbone && { backbone: deps.backbone }),
     invokeCapability,
     ...(capabilityStore && { capabilityStore }),
+    ...(deps.metricsStore && { metricsStore: deps.metricsStore }),
     ...(agentLlm && { agentLlm }),
   };
 }

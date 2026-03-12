@@ -4,6 +4,11 @@ import type {
   CapabilityOutput,
 } from "../types/json.js";
 import type { RunContext } from "../runtime/run-context.js";
+import type { RuntimeWithMiddleware } from "../runtime/middleware.js";
+import {
+  runAgentPipeline,
+  executeCapabilityWithMiddleware,
+} from "../runtime/middleware.js";
 
 export interface Agent {
   readonly id: string;
@@ -26,7 +31,8 @@ export function createAgent(
   role: string,
   capabilities: Map<string, CapabilityInstance>,
   fallback: string | undefined,
-  maxConcurrentTasks: number | undefined
+  maxConcurrentTasks: number | undefined,
+  runtime: RuntimeWithMiddleware
 ): Agent {
   return {
     id,
@@ -44,7 +50,30 @@ export function createAgent(
       if (!cap) {
         throw new Error(`Agent "${id}" has no capability "${action}"`);
       }
-      return cap.execute(input ?? {}, runContext);
+      const doInvoke = (): Promise<CapabilityOutput> =>
+        executeCapabilityWithMiddleware(
+          runtime,
+          action,
+          cap,
+          input ?? {},
+          runContext ?? { invokeCapability: async () => ({}) },
+          id
+        );
+      const agentMiddlewares = runtime.agentMiddleware ?? [];
+      if (agentMiddlewares.length === 0) {
+        return doInvoke();
+      }
+      return runAgentPipeline(
+        agentMiddlewares,
+        {
+          agentId: id,
+          action,
+          input: input ?? {},
+          runContext: runContext ?? { invokeCapability: async () => ({}) },
+          runtime,
+        },
+        doInvoke
+      );
     },
   };
 }

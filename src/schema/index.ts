@@ -75,6 +75,14 @@ const BackboneSchema = z.object({
   }),
 });
 
+// ─── Middleware (agent and capability pipeline) ───────────────────────────────
+const MiddlewareSchema = z
+  .object({
+    agent: z.array(z.string().min(1)).optional(),
+    capability: z.array(z.string().min(1)).optional(),
+  })
+  .optional();
+
 // ─── Fault tolerance ─────────────────────────────────────────────────────────
 const FaultToleranceSchema = z
   .object({
@@ -119,6 +127,7 @@ const OrgSchema = z.object({
   workflows: z.record(WorkflowSchema),
   backbone: BackboneSchema,
   scheduler: SchedulerSchema,
+  middleware: MiddlewareSchema,
   fault_tolerance: FaultToleranceSchema,
 });
 

@@ -16,6 +16,7 @@ export function createApplyCapabilityUpgradeInstance(
       input: CapabilityInput,
       runContext?: RunContext
     ): Promise<CapabilityOutput> {
+      // TODO
       // 1. Get recommendations from input or invoke recommend_upgrades
       // 2. Categorize: add_capability → build.requested event
       //                update_config / model_upgrade → direct YAML patch

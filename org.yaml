@@ -1,4 +1,8 @@
 version: "1.0"
+middleware:
+  agent:
+    - agent_metrics
+  capability: []
 org:
   name: YGGMarketing
   description: Autonomous marketing team for YGG games. Generates content, posts

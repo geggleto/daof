@@ -12,7 +12,7 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 |------|--------------|
 | `src/` | TypeScript source. For full types and signatures see [docs/API_REFERENCE.md](docs/API_REFERENCE.md). |
 | `src/cli/` | CLI entry (`daof` commands) and PID/detach helpers. |
-| `src/runtime/` | Bootstrap, run context (RunContext for capabilities). |
+| `src/runtime/` | Bootstrap, run context (RunContext for capabilities), middleware pipeline (agent/capability), agent-metrics store, middleware registry. |
 | `src/workflow/` | Triggers, executor, LangGraph runner, scheduler, cron-due. |
 | `src/backbone/` | Redis adapter, semaphore, run registry, checkpoint/capability stores. |
 | `src/capabilities/` | Loader, adapters (inline-tool), bundled capabilities, auth. |

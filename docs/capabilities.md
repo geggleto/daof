@@ -109,6 +109,30 @@ Skills can declare **depends_on** and call **runContext.invokeCapability** from 
 
 ---
 
+## Middleware (agent and capability pipeline)
+
+The runtime can run **middleware** at **agent** and **capability** level. Middleware is configured in the org manifest under **`middleware`** and runs on every agent invoke and every capability execution (including nested `invokeCapability`).
+
+### YAML config
+
+```yaml
+middleware:
+  agent:
+    - agent_metrics   # built-in: records duration and success per agent
+  capability: []      # optional capability-level middlewares
+```
+
+- **agent**: list of agent middleware names. Order is preserved (first runs first). Built-in: **agent_metrics** (records step duration and success into the metrics store so `fetch_agent_performance` "report" can read them).
+- **capability**: list of capability middleware names. No built-ins by default; use the registry to add custom capability middlewares by name.
+
+When **`middleware`** is omitted or the arrays are empty, no middleware runs (same behavior as before). Unknown middleware names cause bootstrap to fail with a clear error (e.g. "Unknown agent middleware: foo. Known: agent_metrics.").
+
+### Metrics store and fetch_agent_performance
+
+When the backbone provides a capability store (e.g. Redis), **connectBackbone** also sets **runtime.metricsStore** (a scoped store for agent metrics). The **agent_metrics** middleware and the **fetch_agent_performance** capability both use this store when available (RunContext carries **metricsStore** when set). So enabling `agent_metrics` in YAML and using a backbone with a capability store gives you automatic per-agent step recording; call the **fetch_agent_performance** capability with action **"report"** to read aggregated stats.
+
+---
+
 ## Persistence
 
 A capability definition can set **persistence** (e.g. `"redis"`) in the manifest. When set and the runtime has a **capability store** (e.g. after `connectBackbone(runtime)` with Redis), the RunContext passed to that capability includes a **scoped** store: all keys are prefixed by capability id so each capability’s data is isolated (keyspace effectively `daof:capability:{capabilityId}:*`). Capabilities without **persistence** do not receive a store. Use this for capabilities that need to remember or cache data across runs (e.g. key-value state, caches).

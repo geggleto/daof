@@ -122,6 +122,9 @@ interface OrgRuntime {
   backbone?: BackboneAdapter;
   checkpointStore?: CheckpointStore;
   capabilityStore?: CapabilityStore;
+  metricsStore?: CapabilityStore;
+  agentMiddleware?: AgentMiddleware[];
+  capabilityMiddleware?: CapabilityMiddleware[];
 }
 ```
 
@@ -133,8 +136,66 @@ function bootstrap(config: OrgConfig): OrgRuntime;
 function connectBackbone(runtime: OrgRuntime): Promise<void>;
 ```
 
-- `bootstrap` — resolve env refs, load capabilities, bootstrap agents; does not connect backbone
-- `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; when adapter exposes `createCheckpointStore`/`createCapabilityStore`, attaches those to runtime
+- `bootstrap` — resolve env refs, load capabilities, resolve config.middleware via registry (agent/capability pipeline), bootstrap agents; does not connect backbone
+- `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; when adapter exposes `createCheckpointStore`/`createCapabilityStore`, attaches those to runtime and sets `runtime.metricsStore` (scoped store for agent metrics)
+
+### src/runtime/middleware.ts
+
+**Types**
+
+```ts
+interface RuntimeWithMiddleware {
+  config: OrgConfig;
+  capabilities: Map<string, CapabilityInstance>;
+  capabilityStore?: CapabilityStore;
+  metricsStore?: CapabilityStore;
+  agentMiddleware?: AgentMiddleware[];
+  capabilityMiddleware?: CapabilityMiddleware[];
+}
+
+type AgentMiddleware = (
+  ctx: AgentMiddlewareContext,
+  next: () => Promise<CapabilityOutput>
+) => Promise<CapabilityOutput>;
+
+type CapabilityMiddleware = (
+  ctx: CapabilityMiddlewareContext,
+  next: () => Promise<CapabilityOutput>
+) => Promise<CapabilityOutput>;
+```
+
+**Functions**
+
+```ts
+function runAgentPipeline(
+  middlewares: AgentMiddleware[],
+  ctx: AgentMiddlewareContext,
+  next: () => Promise<CapabilityOutput>
+): Promise<CapabilityOutput>;
+
+function runCapabilityPipeline(
+  middlewares: CapabilityMiddleware[],
+  ctx: CapabilityMiddlewareContext,
+  next: () => Promise<CapabilityOutput>
+): Promise<CapabilityOutput>;
+
+function executeCapabilityWithMiddleware(
+  runtime: RuntimeWithMiddleware,
+  capabilityId: string,
+  instance: CapabilityInstance,
+  input: CapabilityInput,
+  runContext: RunContext,
+  agentId?: string
+): Promise<CapabilityOutput>;
+```
+
+### src/runtime/agent-metrics-store.ts
+
+Shared storage helpers for agent step metrics (used by fetch_agent_performance and agent_metrics middleware). **Functions:** `recordAgentStep(store, agentId, durationMs, success, qualityScore?)`, `loadAgentIndex(store)`, `loadAgentMetrics(store, agentId)`, `buildAgentReport(metrics, lookbackMs)`.
+
+### src/runtime/middleware-registry.ts
+
+Maps middleware names (e.g. `agent_metrics`) to factory functions. **Functions:** `resolveAgentMiddlewares(names, runtime)`, `resolveCapabilityMiddlewares(names, runtime)`, `registerAgentMiddleware(name, factory)`, `registerCapabilityMiddleware(name, factory)`, `getKnownAgentMiddlewareNames()`, `getKnownCapabilityMiddlewareNames()`. Unknown names throw at resolve.
 
 ### src/runtime/run-org.ts
 
@@ -166,6 +227,7 @@ interface RunContext {
   backbone?: BackboneAdapter;
   invokeCapability?(capabilityId: string, input?: CapabilityInput): Promise<CapabilityOutput>;
   capabilityStore?: CapabilityStore;
+  metricsStore?: CapabilityStore;
   /** Current agent's provider/model/API key for LLM calls; passed from executor, inherited in nested invocations. */
   agentLlm?: AgentLlm;
 }
@@ -175,6 +237,8 @@ interface RunContextFactoryDeps {
   capabilities: Map<string, CapabilityInstance>;
   backbone?: BackboneAdapter;
   capabilityStore?: CapabilityStore;
+  metricsStore?: CapabilityStore;
+  capabilityMiddleware?: CapabilityMiddleware[];
 }
 ```
 

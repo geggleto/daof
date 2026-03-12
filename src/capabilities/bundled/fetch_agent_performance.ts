@@ -2,35 +2,14 @@ import type { CapabilityInstance, CapabilityInput, CapabilityOutput, JsonValue }
 import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import type { CapabilityStore } from "../../backbone/capability-store.js";
+import {
+  recordAgentStep,
+  loadAgentIndex,
+  loadAgentMetrics,
+  buildAgentReport,
+  type AgentReport,
+} from "../../runtime/agent-metrics-store.js";
 import { registerBundled } from "./registry.js";
-
-interface StepRecord {
-  timestamp: number;
-  durationMs: number;
-  success: boolean;
-  qualityScore?: number;
-}
-
-interface AgentMetrics {
-  agentId: string;
-  records: StepRecord[];
-}
-
-interface AgentReport {
-  agent_id: string;
-  task_completions: number;
-  failure_count: number;
-  avg_step_duration_ms: number;
-  error_rate: number;
-  last_quality_scores: number[];
-}
-
-const METRICS_INDEX_KEY = "agent_ids";
-const QUALITY_SCORES_LIMIT = 10;
-
-function agentMetricsKey(agentId: string): string {
-  return `metrics:${agentId}`;
-}
 
 function getConfigArray(def: CapabilityDefinition, key: string): string[] {
   const c = def.config;
@@ -54,96 +33,20 @@ const memoryStore = new Map<string, JsonValue>();
 
 function fallbackStore(): CapabilityStore {
   return {
-    async get(key: string) { return memoryStore.get(key) ?? null; },
-    async set(key: string, value: JsonValue) { memoryStore.set(key, value); },
-    async delete(key: string) { memoryStore.delete(key); },
+    async get(key: string) {
+      return memoryStore.get(key) ?? null;
+    },
+    async set(key: string, value: JsonValue) {
+      memoryStore.set(key, value);
+    },
+    async delete(key: string) {
+      memoryStore.delete(key);
+    },
   };
 }
 
 function resolveStore(runContext?: RunContext): CapabilityStore {
-  return runContext?.capabilityStore ?? fallbackStore();
-}
-
-async function loadAgentIndex(store: CapabilityStore): Promise<string[]> {
-  const raw = await store.get(METRICS_INDEX_KEY);
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  return [];
-}
-
-async function saveAgentIndex(store: CapabilityStore, ids: string[]): Promise<void> {
-  await store.set(METRICS_INDEX_KEY, ids);
-}
-
-async function loadAgentMetrics(store: CapabilityStore, agentId: string): Promise<AgentMetrics> {
-  const raw = await store.get(agentMetricsKey(agentId));
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const obj = raw as Record<string, JsonValue>;
-    const records = Array.isArray(obj.records) ? (obj.records as unknown as StepRecord[]) : [];
-    return { agentId, records };
-  }
-  return { agentId, records: [] };
-}
-
-async function saveAgentMetrics(store: CapabilityStore, metrics: AgentMetrics): Promise<void> {
-  await store.set(agentMetricsKey(metrics.agentId), {
-    agentId: metrics.agentId,
-    records: metrics.records as unknown as JsonValue[],
-  });
-}
-
-async function recordStep(
-  store: CapabilityStore,
-  agentId: string,
-  durationMs: number,
-  success: boolean,
-  qualityScore?: number
-): Promise<void> {
-  const index = await loadAgentIndex(store);
-  if (!index.includes(agentId)) {
-    index.push(agentId);
-    await saveAgentIndex(store, index);
-  }
-
-  const metrics = await loadAgentMetrics(store, agentId);
-  const record: StepRecord = {
-    timestamp: Date.now(),
-    durationMs,
-    success,
-    ...(qualityScore !== undefined && { qualityScore }),
-  };
-  metrics.records.push(record);
-  await saveAgentMetrics(store, metrics);
-}
-
-function buildReport(
-  metrics: AgentMetrics,
-  lookbackMs: number
-): AgentReport {
-  const cutoff = Date.now() - lookbackMs;
-  const recent = metrics.records.filter((r) => r.timestamp >= cutoff);
-
-  const total = recent.length;
-  const failures = recent.filter((r) => !r.success).length;
-  const completions = total - failures;
-  const avgDuration =
-    total > 0
-      ? Math.round(recent.reduce((sum, r) => sum + r.durationMs, 0) / total)
-      : 0;
-  const errorRate = total > 0 ? parseFloat((failures / total).toFixed(4)) : 0;
-
-  const qualityScores = recent
-    .filter((r) => r.qualityScore !== undefined)
-    .map((r) => r.qualityScore!)
-    .slice(-QUALITY_SCORES_LIMIT);
-
-  return {
-    agent_id: metrics.agentId,
-    task_completions: completions,
-    failure_count: failures,
-    avg_step_duration_ms: avgDuration,
-    error_rate: errorRate,
-    last_quality_scores: qualityScores,
-  };
+  return runContext?.metricsStore ?? runContext?.capabilityStore ?? fallbackStore();
 }
 
 /**
@@ -155,6 +58,7 @@ function buildReport(
  * action "report" (default): Input: { exclude?, lookback_days? }
  *   Returns { agents: AgentReport[] } with per-agent performance stats
  *   filtered by the exclude list and lookback window.
+ *   Uses the same store as the agent_metrics middleware when runContext.metricsStore is set.
  */
 export function createFetchAgentPerformanceInstance(
   _capabilityId: string,
@@ -177,7 +81,7 @@ export function createFetchAgentPerformanceInstance(
         const qualityScore = typeof input.quality_score === "number" ? input.quality_score : undefined;
 
         try {
-          await recordStep(store, agentId, durationMs, success, qualityScore);
+          await recordAgentStep(store, agentId, durationMs, success, qualityScore);
           return { ok: true };
         } catch (err) {
           const error = err instanceof Error ? err.message : String(err);
@@ -202,7 +106,7 @@ export function createFetchAgentPerformanceInstance(
         for (const id of agentIds) {
           if (exclude.has(id)) continue;
           const metrics = await loadAgentMetrics(store, id);
-          const report = buildReport(metrics, lookbackMs);
+          const report = buildAgentReport(metrics, lookbackMs);
           if (report.task_completions > 0 || report.failure_count > 0) {
             reports.push(report);
           }
