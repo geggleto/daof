@@ -21,12 +21,11 @@ yarn.lock
 .env.test.local
 .env.production.local
 
-# Build and Output Directories
+# Build and Output Directories (root-level only; src/build/ is the DAOF build module)
 dist/
-build/
+/build/
 out/
 .next/
-**/build/
 **/.next/
 **/dist/
 **/.prisma/
