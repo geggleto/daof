@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
+import { registerBundled } from "./registry.js";
 
 function getEndpoint(def: CapabilityDefinition): string | undefined {
   const c = def.config;
@@ -52,3 +53,4 @@ export function createMetricsFetcherInstance(
     },
   };
 }
+registerBundled("metrics_fetcher", createMetricsFetcherInstance);

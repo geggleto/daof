@@ -22,12 +22,14 @@ const ACQUIRE_SCRIPT = `
  * Uses key daof:semaphore:workflows with integer value = in-use count.
  * acquire: atomic Lua script to only INCR if count < max.
  * release: DECR.
+ * When redisClient is provided, it is used instead of creating a new connection (DIP: injectable for tests/shared connection).
  */
 export function createRedisWorkflowSemaphore(
   redisUrl: string,
-  maxConcurrent: number
+  maxConcurrent: number,
+  redisClient?: Redis
 ): WorkflowSemaphore {
-  let client: Redis | null = null;
+  let client: Redis | null = redisClient ?? null;
 
   async function getClient(): Promise<Redis> {
     if (!client) {

@@ -1,5 +1,6 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 
 /** Stub URL used when post_id is stub/dry-run (DAOF intro tweet). */
 const STUB_URL = "https://x.com/geggleto/status/2031537230687224302";
@@ -34,3 +35,4 @@ export function createTweetPostRecordInstance(
     },
   };
 }
+registerBundled("tweet_post_record", createTweetPostRecordInstance);

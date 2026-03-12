@@ -1,6 +1,7 @@
 import { TwitterApi } from "twitter-api-v2";
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 
 function getStr(config: Record<string, unknown> | undefined, key: string): string {
   if (!config || typeof config !== "object") return "";
@@ -67,3 +68,4 @@ export function createXPosterInstance(
     },
   };
 }
+registerBundled("x_poster", createXPosterInstance);

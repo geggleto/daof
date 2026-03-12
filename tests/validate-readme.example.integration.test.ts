@@ -38,10 +38,10 @@ describe("org.example.yaml (readme canonical example)", () => {
     }
   });
 
-  it("bootstraps and ceo has provider and model", () => {
+  it("bootstraps and ceo has provider and model", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const runtime = bootstrap(config);
+    const runtime = await bootstrap(config);
     const ceo = runtime.agents.get("ceo");
     expect(ceo).toBeDefined();
     if (!ceo) return;
@@ -52,7 +52,7 @@ describe("org.example.yaml (readme canonical example)", () => {
   it("bootstraps and ceo.invoke('check_budget', {}) returns stub output", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const runtime = bootstrap(config);
+    const runtime = await bootstrap(config);
     expect(runtime.agents.size).toBeGreaterThan(0);
     expect(runtime.capabilities.size).toBeGreaterThan(0);
     const ceo = runtime.agents.get("ceo");

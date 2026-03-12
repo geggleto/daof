@@ -4,6 +4,7 @@ import type { RunContext } from "../../runtime/run-context.js";
 import { getProviderService } from "../../providers/registry.js";
 import { promptSimilarity } from "../../build/prompts.js";
 import { extractYamlFromMarkdown } from "../../build/merge.js";
+import { registerBundled } from "./registry.js";
 
 export interface SimilarityDuplicate {
   id1: string;
@@ -77,3 +78,4 @@ export function createVerifySimilarityInstance(
     },
   };
 }
+registerBundled("verify_similarity", createVerifySimilarityInstance);

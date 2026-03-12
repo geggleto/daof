@@ -1,4 +1,4 @@
-import type { CircuitBreaker } from "p-circuit-breaker";
+import type { AppCircuitBreaker } from "../fault/circuit-breaker.js";
 import type { CapabilityInput, CapabilityOutput } from "../types/json.js";
 import type { SequentialStep, ParallelStep } from "../schema/index.js";
 import type { OrgRuntime } from "../runtime/bootstrap.js";
@@ -10,7 +10,7 @@ import { evaluateCondition, resolveParams } from "./context.js";
 
 export interface RunWorkflowOptions {
   /** When set, each step is run through the breaker; after threshold failures the circuit opens and the run fails. */
-  circuitBreaker?: CircuitBreaker;
+  circuitBreaker?: AppCircuitBreaker;
   /** When set (scheduler mode), run is registered for kill and cancel is checked between steps. */
   runRegistry?: RunRegistry | null;
 }

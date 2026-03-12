@@ -10,7 +10,7 @@ describe("workflow integration", () => {
   it("runWorkflow(runtime, 'hourly_metrics') succeeds and context contains data_analyst output", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const runtime = bootstrap(config);
+    const runtime = await bootstrap(config);
     const result = await runWorkflow(runtime, "hourly_metrics");
     expect(result.success).toBe(true);
     expect(result.context).toHaveProperty("data_analyst");
@@ -21,7 +21,7 @@ describe("workflow integration", () => {
   it("runWorkflow(runtime, 'daily_content_cycle') runs steps in order and context has step outputs", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const runtime = bootstrap(config);
+    const runtime = await bootstrap(config);
     const result = await runWorkflow(runtime, "daily_content_cycle");
     expect(result.success).toBe(true);
     const ctx = result.context;

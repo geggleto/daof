@@ -3,7 +3,8 @@ import tsconfig from "./tsconfig.json" with { type: "json" };
 
 export default defineConfig({
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.unit.test.ts", "tests/**/*.integration.test.ts"],
+    setupFiles: ["./tests/setup.ts"],
   },
   resolve: {
     extensions: [".ts"],

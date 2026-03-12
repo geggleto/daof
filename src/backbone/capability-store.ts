@@ -41,9 +41,10 @@ export function createScopedCapabilityStore(
 /**
  * Redis-backed capability store using keyspace daof:capability:*.
  * Use the same URL as the backbone or a dedicated Redis instance.
+ * When redisClient is provided, it is used instead of creating a new connection (DIP: injectable for tests/shared connection).
  */
-export function createRedisCapabilityStore(redisUrl: string): CapabilityStore {
-  let client: Redis | null = null;
+export function createRedisCapabilityStore(redisUrl: string, redisClient?: Redis): CapabilityStore {
+  let client: Redis | null = redisClient ?? null;
 
   async function getClient(): Promise<Redis> {
     if (!client) {

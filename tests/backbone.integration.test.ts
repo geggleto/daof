@@ -13,28 +13,6 @@ const redisConfig: BackboneConfig = {
   },
 };
 
-describe("backbone factory", () => {
-  it("returns adapter for type redis", () => {
-    const adapter = createBackbone(redisConfig);
-    expect(adapter).toHaveProperty("connect");
-    expect(adapter).toHaveProperty("disconnect");
-    expect(adapter).toHaveProperty("publish");
-    expect(adapter).toHaveProperty("subscribe");
-  });
-
-  it("throws for type rabbitmq", () => {
-    expect(() =>
-      createBackbone({ ...redisConfig, type: "rabbitmq" })
-    ).toThrow("RabbitMQ backbone not implemented");
-  });
-
-  it("throws for type kafka", () => {
-    expect(() =>
-      createBackbone({ ...redisConfig, type: "kafka" })
-    ).toThrow("Kafka backbone not implemented");
-  });
-});
-
 /** Set REDIS_AVAILABLE=1 to run Redis integration tests (e.g. with docker run -p 6379:6379 redis). */
 const redisAvailable = process.env.REDIS_AVAILABLE === "1";
 

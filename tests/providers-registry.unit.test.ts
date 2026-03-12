@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
+import "../src/providers/register-providers.js";
 import {
   getProvider,
   getProviderApiKey,
+  getKnownProviderIds,
   isKnownProvider,
-  KNOWN_PROVIDER_IDS,
 } from "../src/providers/registry.js";
 
 describe("providers registry", () => {
-  it("KNOWN_PROVIDER_IDS includes cursor", () => {
-    expect(KNOWN_PROVIDER_IDS).toContain("cursor");
+  it("getKnownProviderIds includes cursor", () => {
+    expect(getKnownProviderIds()).toContain("cursor");
   });
 
   it("isKnownProvider returns true for cursor", () => {

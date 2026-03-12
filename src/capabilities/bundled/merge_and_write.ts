@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { loadYaml, validate, parseYamlString, writeOrgFile } from "../../parser/index.js";
 import { extractYamlFromMarkdown, extractGenerated, mergeIntoConfig } from "../../build/merge.js";
+import { registerBundled } from "./registry.js";
 
 /**
  * Bundled merge_and_write capability. Input: { org_path, generated_yaml }.
@@ -71,3 +72,4 @@ export function createMergeAndWriteInstance(
     },
   };
 }
+registerBundled("merge_and_write", createMergeAndWriteInstance);

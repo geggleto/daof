@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { getProviderService } from "../../providers/registry.js";
 import { promptGenerator } from "../../build/prompts.js";
+import { registerBundled } from "./registry.js";
 
 function toStringList(v: unknown): string[] {
   if (Array.isArray(v)) {
@@ -57,3 +58,4 @@ export function createGenerateYamlInstance(
     },
   };
 }
+registerBundled("generate_yaml", createGenerateYamlInstance);

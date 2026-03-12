@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { loadYaml, validate, writeOrgFile } from "../../parser/index.js";
 import { randomUUID } from "node:crypto";
+import { registerBundled } from "./registry.js";
 
 // ... recommendation types and parsing ...
 
@@ -25,3 +26,4 @@ export function createApplyCapabilityUpgradeInstance(
     },
   };
 }
+registerBundled("apply_capability_upgrade", createApplyCapabilityUpgradeInstance);

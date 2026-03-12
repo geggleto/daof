@@ -57,7 +57,7 @@ describe("schema validation (agent provider + model)", () => {
 });
 
 describe("bootstrap agent provider validation", () => {
-  it("throws when agent has unknown provider", () => {
+  it("throws when agent has unknown provider", async () => {
     const raw = {
       ...minimalValidOrg,
       agents: {
@@ -70,6 +70,6 @@ describe("bootstrap agent provider validation", () => {
       },
     } as ParsedYaml;
     const config = validate(raw);
-    expect(() => bootstrap(config)).toThrow(/Unknown provider "unknown_provider"/);
+    await expect(bootstrap(config)).rejects.toThrow(/Unknown provider "unknown_provider"/);
   });
 });

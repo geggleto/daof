@@ -1,5 +1,6 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 
 function shouldSkip(postId: string, dryRun: boolean): boolean {
   if (dryRun) return true;
@@ -35,3 +36,4 @@ export function createTweetMetricsProcessorInstance(
     },
   };
 }
+registerBundled("tweet_metrics_processor", createTweetMetricsProcessorInstance);

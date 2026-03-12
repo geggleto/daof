@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { JsonValue } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 
 const OPS = ["get", "set", "delete"] as const;
 type Op = (typeof OPS)[number];
@@ -66,3 +67,4 @@ export function createKeyValueStoreInstance(
     },
   };
 }
+registerBundled("key_value_store", createKeyValueStoreInstance);

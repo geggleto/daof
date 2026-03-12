@@ -1,14 +1,19 @@
-import type { CircuitBreaker } from "p-circuit-breaker";
 import { MemorySaver } from "@langchain/langgraph";
 import type { OrgRuntime } from "../runtime/bootstrap.js";
 import type { CapabilityInput } from "../types/json.js";
 import type { WorkflowRunResult, WorkflowContext } from "./types.js";
 import { buildWorkflowGraph } from "./graph-builder.js";
 import type { RunRegistry } from "../backbone/run-registry.js";
+import type { AppCircuitBreaker } from "../fault/circuit-breaker.js";
+
+/** Checkpointer type compatible with LangGraph compile(); default is MemorySaver when not provided. */
+export type LangGraphCheckpointer = InstanceType<typeof MemorySaver>;
 
 export interface LangGraphRunOptions {
-  circuitBreaker?: CircuitBreaker;
+  circuitBreaker?: AppCircuitBreaker;
   runRegistry?: RunRegistry | null;
+  /** When provided, used for workflow state persistence; otherwise MemorySaver. Enables Redis-backed or test checkpointers. */
+  checkpointer?: LangGraphCheckpointer;
 }
 
 function generateRunId(): string {
@@ -50,7 +55,7 @@ export async function runWorkflowWithLangGraph(
   }
 
   const graphBuilder = buildWorkflowGraph(runtime, workflow, runRegistry);
-  const checkpointer = new MemorySaver();
+  const checkpointer = options?.checkpointer ?? new MemorySaver();
   const compiled = graphBuilder.compile({ checkpointer });
 
   const invoke = async () => {

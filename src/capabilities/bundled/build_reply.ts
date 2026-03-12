@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
+import { registerBundled } from "./registry.js";
 
 const DEFAULT_BUILD_REPLIES_QUEUE = "build.replies";
 
@@ -57,3 +58,4 @@ export function createBuildReplyInstance(
     },
   };
 }
+registerBundled("build_reply", createBuildReplyInstance);

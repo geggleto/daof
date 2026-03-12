@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { getProviderService } from "../../providers/registry.js";
 import { promptPlanner } from "../../build/prompts.js";
+import { registerBundled } from "./registry.js";
 
 /**
  * Bundled produce_prd capability (Planner). Input: { description, existing_capabilities? }.
@@ -45,3 +46,4 @@ export function createProducePrdInstance(
     },
   };
 }
+registerBundled("produce_prd", createProducePrdInstance);

@@ -1,5 +1,6 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 
 function getQueueName(def: CapabilityDefinition): string {
   const config = def.config;
@@ -37,3 +38,4 @@ export function createEventEmitterInstance(
     },
   };
 }
+registerBundled("event_emitter", createEventEmitterInstance);

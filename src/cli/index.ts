@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import "../providers/register-providers.js";
+import "../backbone/register-backbones.js";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { ZodError } from "zod";

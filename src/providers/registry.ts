@@ -13,16 +13,22 @@ export interface ProviderDefinition {
 
 export type ProviderServiceFactory = (apiKey: string) => LLMProviderService;
 
-const REGISTRY: Record<string, ProviderDefinition> = {
-  cursor: {
-    id: "cursor",
-    apiKeyEnvVar: "CURSOR_API_KEY",
-  },
-};
+const REGISTRY: Record<string, ProviderDefinition> = {};
 
 const SERVICE_FACTORIES: Record<string, ProviderServiceFactory> = {};
 
-export const KNOWN_PROVIDER_IDS: string[] = Object.keys(REGISTRY);
+/**
+ * Register a provider definition (id + apiKeyEnvVar). Call from provider modules on load
+ * so new providers can be added without editing this file. Built-ins register in register-providers.js.
+ */
+export function registerProviderDefinition(id: string, definition: ProviderDefinition): void {
+  REGISTRY[id] = definition;
+}
+
+/** Returns the list of registered provider ids (computed from current registry). */
+export function getKnownProviderIds(): string[] {
+  return Object.keys(REGISTRY);
+}
 
 export function isKnownProvider(id: string): boolean {
   return id in REGISTRY;

@@ -2,7 +2,7 @@ import type { OrgConfig } from "../schema/index.js";
 import type { CapabilityInstance } from "../types/json.js";
 import type { Agent } from "./agent.js";
 import { createAgent } from "./agent.js";
-import { isKnownProvider, KNOWN_PROVIDER_IDS } from "../providers/registry.js";
+import { isKnownProvider, getKnownProviderIds } from "../providers/registry.js";
 
 /**
  * Build a map of agent id -> Agent from resolved org config and loaded capabilities.
@@ -16,7 +16,7 @@ export function bootstrapAgents(
   for (const [id, agentConfig] of Object.entries(config.agents)) {
     if (!isKnownProvider(agentConfig.provider)) {
       throw new Error(
-        `Unknown provider "${agentConfig.provider}" for agent "${id}". Known: ${KNOWN_PROVIDER_IDS.join(", ")}.`
+        `Unknown provider "${agentConfig.provider}" for agent "${id}". Known: ${getKnownProviderIds().join(", ")}.`
       );
     }
     const agentCaps = new Map<string, CapabilityInstance>();

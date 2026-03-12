@@ -1,5 +1,6 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { registerBundled } from "./registry.js";
 import { copyFile, mkdir } from "fs/promises";
 import { pathToFileURL } from "url";
 import { join } from "path";
@@ -61,3 +62,4 @@ export function createFileUploaderInstance(
     },
   };
 }
+registerBundled("file_uploader", createFileUploaderInstance);

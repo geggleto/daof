@@ -11,6 +11,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "test:unit": "vitest run -c vitest.unit.config.ts",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
     "validate": "node dist/cli/index.js validate org.example.yaml",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build"

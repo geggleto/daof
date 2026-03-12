@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
 import { getProviderService } from "../../providers/registry.js";
+import { registerBundled } from "./registry.js";
 
 function getEndpoint(def: CapabilityDefinition): string | undefined {
   const c = def.config;
@@ -73,3 +74,4 @@ export function createTextGeneratorInstance(
     },
   };
 }
+registerBundled("text_generator", createTextGeneratorInstance);

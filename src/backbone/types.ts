@@ -11,30 +11,47 @@ import type { CapabilityStore } from "./capability-store.js";
 export type BackbonePayload = Record<string, JsonValue> | string;
 
 /**
- * Adapter interface for backbone (Redis, RabbitMQ, Kafka).
- * Implementations are swappable via config.backbone.type.
- * Optional methods expose backend-specific features (semaphore, run registry, stores);
- * callers use them when present instead of branching on config.backbone.type.
+ * Minimal backbone contract: messaging only. Use this type when you only need
+ * connect, disconnect, publish, and subscribe. New backbones can implement
+ * just this and omit optional store/semaphore/registry features.
  */
-export interface BackboneAdapter {
-  /** Connect to the backbone. Idempotent. */
+export interface BackboneMessaging {
   connect(): Promise<void>;
-
-  /** Disconnect and release resources. */
   disconnect(): Promise<void>;
-
-  /** Publish a message to the named queue. */
   publish(queueName: string, payload: BackbonePayload): Promise<void>;
-
-  /**
-   * Subscribe to the named queue. Handler receives raw string (caller may JSON.parse).
-   * Returns an unsubscribe function.
-   */
   subscribe(
     queueName: string,
     handler: (payload: string) => void | Promise<void>
   ): Promise<() => void>;
+}
 
+/** Optional: backbone that can create a workflow semaphore (e.g. Redis). */
+export interface WorkflowSemaphoreProvider {
+  createWorkflowSemaphore(maxConcurrent: number): WorkflowSemaphore;
+}
+
+/** Optional: backbone that can create a run registry for kill support (e.g. Redis). */
+export interface RunRegistryProvider {
+  createRunRegistry(): (RunRegistry & RunRegistryCancel) | null;
+}
+
+/** Optional: backbone that can create a checkpoint store (e.g. Redis). */
+export interface CheckpointStoreProvider {
+  createCheckpointStore(): CheckpointStore;
+}
+
+/** Optional: backbone that can create a capability key-value store (e.g. Redis). */
+export interface CapabilityStoreProvider {
+  createCapabilityStore(): CapabilityStore;
+}
+
+/**
+ * Full backbone adapter. Core contract is BackboneMessaging (connect, disconnect,
+ * publish, subscribe). Optional methods expose backend-specific features;
+ * callers use them when present (e.g. adapter.createCheckpointStore?.()).
+ * Implementations may provide only the core and omit optional methods.
+ */
+export interface BackboneAdapter extends BackboneMessaging {
   /** When present, the backbone supports a workflow semaphore (e.g. Redis). */
   createWorkflowSemaphore?(maxConcurrent: number): WorkflowSemaphore;
 

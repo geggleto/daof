@@ -3,6 +3,7 @@ import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import { getProviderService } from "../../providers/registry.js";
 import { promptVerifier } from "../../build/prompts.js";
+import { registerBundled } from "./registry.js";
 
 /**
  * Bundled verify_build capability (Verifier). Input: { prd, summary }.
@@ -44,3 +45,4 @@ export function createVerifyBuildInstance(
     },
   };
 }
+registerBundled("verify_build", createVerifyBuildInstance);

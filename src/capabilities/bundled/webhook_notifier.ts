@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
+import { registerBundled } from "./registry.js";
 
 /**
  * Bundled WebhookNotifier capability. Input: { url, message }. Output: { ok: true } or { ok: false, error }.
@@ -42,3 +43,4 @@ export function createWebhookNotifierInstance(
     },
   };
 }
+registerBundled("webhook_notifier", createWebhookNotifierInstance);

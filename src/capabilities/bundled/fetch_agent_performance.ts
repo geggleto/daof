@@ -2,6 +2,7 @@ import type { CapabilityInstance, CapabilityInput, CapabilityOutput, JsonValue }
 import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
 import type { CapabilityStore } from "../../backbone/capability-store.js";
+import { registerBundled } from "./registry.js";
 
 interface StepRecord {
   timestamp: number;
@@ -215,3 +216,4 @@ export function createFetchAgentPerformanceInstance(
     },
   };
 }
+registerBundled("fetch_agent_performance", createFetchAgentPerformanceInstance);

@@ -28,9 +28,10 @@ export interface RunRegistryCancel {
 /**
  * Redis-backed run registry for tracking active workflow runs and cancellation.
  * Keys: daof:run:<run_id> = "1", daof:run:<run_id>:cancel = "1" when kill requested.
+ * When redisClient is provided, it is used instead of creating a new connection (DIP: injectable for tests/shared connection).
  */
-export function createRedisRunRegistry(redisUrl: string): RunRegistry & RunRegistryCancel {
-  let client: Redis | null = null;
+export function createRedisRunRegistry(redisUrl: string, redisClient?: Redis): RunRegistry & RunRegistryCancel {
+  let client: Redis | null = redisClient ?? null;
 
   async function getClient(): Promise<Redis> {
     if (!client) {

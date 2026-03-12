@@ -34,9 +34,10 @@ import { Redis } from "ioredis";
 /**
  * Redis-backed checkpoint store using keyspace daof:checkpoint:*.
  * Use a dedicated Redis client or the same URL as the backbone; does not share keys with capability data.
+ * When redisClient is provided, it is used instead of creating a new connection (DIP: injectable for tests/shared connection).
  */
-export function createRedisCheckpointStore(redisUrl: string): CheckpointStore {
-  let client: Redis | null = null;
+export function createRedisCheckpointStore(redisUrl: string, redisClient?: Redis): CheckpointStore {
+  let client: Redis | null = redisClient ?? null;
 
   async function getClient(): Promise<Redis> {
     if (!client) {
