@@ -18,8 +18,8 @@ import { createMergeAndWriteInstance } from "./merge_and_write.js";
 import { createVerifyBuildInstance } from "./verify_build.js";
 import { createVerifySimilarityInstance } from "./verify_similarity.js";
 import { createBuildReplyInstance } from "./build_reply.js";
-import createFetchAgentPerformanceInstance from "./fetch_agent_performance.js";
-import createApplyCapabilityUpgradeInstance from "./apply_capability_upgrade.js";
+import { createFetchAgentPerformanceInstance } from "./fetch_agent_performance.js";
+import { createApplyCapabilityUpgradeInstance } from "./apply_capability_upgrade.js";
 
 export type BundledCapabilityFactory = (
   capabilityId: string,

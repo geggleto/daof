@@ -21,6 +21,7 @@ export function createApplyCapabilityUpgradeInstance(
       // 3. Emit build.requested via event_emitter for new capabilities
       // 4. Load, patch, validate, write org for config/model changes
       // 5. Return summary with applied count and errors
+      return { ok: true };
     },
   };
 }
