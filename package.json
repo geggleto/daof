@@ -1,5 +1,5 @@
 {
-  "name": "daof",
+  "name": "@geggleto/daof",
   "version": "0.1.0",
   "description": "Declarative Agentic Orchestration Framework",
   "type": "module",
@@ -11,15 +11,28 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "validate": "node dist/cli/index.js validate org.example.yaml"
+    "validate": "node dist/cli/index.js validate org.example.yaml",
+    "prepublishOnly": "npm run build",
+    "prepare": "npm run build"
   },
   "keywords": [
     "daof",
     "agents",
     "orchestration",
-    "yaml"
+    "yaml",
+    "llm",
+    "workflow",
+    "autonomous"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geggleto/daof"
+  },
+  "homepage": "https://github.com/geggleto/daof#readme",
+  "bugs": {
+    "url": "https://github.com/geggleto/daof/issues"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -29,7 +42,9 @@
     "commander": "^12.1.0",
     "cron-parser": "^5.5.0",
     "ioredis": "^5.10.0",
+    "marked": "^17.0.4",
     "node-cron": "^4.2.1",
+    "ora": "^9.3.0",
     "p-circuit-breaker": "^0.0.3",
     "twitter-api-v2": "^1.29.0",
     "yaml": "^2.6.1",

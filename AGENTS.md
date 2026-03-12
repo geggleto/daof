@@ -4,7 +4,7 @@ This file is the single entry point for AI agents working on this codebase. Read
 
 ## Purpose
 
-DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizations from a single YAML manifest. You define agents, capabilities (tools/skills), workflows (cron or event-triggered), backbone (queues), and fault tolerance in YAML; the runtime bootstraps and executes workflows. **Intended use is CLI-only** for end users: `daof validate`, `daof run`, `daof kill`. Programmatic use (e.g. `loadYaml`, `validate`, `bootstrap`, `runWorkflow`) exists for integration or tooling but is not the supported end-user interface for the MVP.
+DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizations from a single YAML manifest. You define agents, capabilities (tools/skills), workflows (cron or event-triggered), backbone (queues), and fault tolerance in YAML; the runtime bootstraps and executes workflows. **Intended use is CLI-only** for end users: `daof validate`, `daof run`, `daof kill`, `daof build "<description>"`. Programmatic use (e.g. `loadYaml`, `validate`, `bootstrap`, `runWorkflow`) exists for integration or tooling but is not the supported end-user interface for the MVP.
 
 ## Repository layout
 
@@ -21,11 +21,12 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 | `src/schema/` | Zod schemas and config types (OrgConfig, etc.). |
 | `src/fault/` | App-level circuit breaker. |
 | `src/parser/`, `src/config/`, `src/types/` | YAML loading, env resolution, JsonValue/CapabilityInput/Output. |
+| `src/build/` | Build flow: Planner (PRD), review, Generator, merge into org, Verifier. Uses org-level planner/generator/builder/verifier agents when present; supports `--via-events` (build.requested / build.replies). |
 | `docs/` | Human and agent documentation. |
 
 ## Key entry points
 
-- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`.
+- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`, `daof build "<description>" [--file <path>] [--yolo] [--provider <id>] [--via-events]` (generate capabilities/workflows/agents and merge into org; use --via-events to trigger build via backbone events when org is running).
 - **Programmatic:** [src/index.ts](src/index.ts) — `loadYaml`, `validate`, `bootstrap`, `connectBackbone`, `runWorkflow`, `createBackbone`, `createAppCircuitBreaker`; types: `OrgConfig`, `OrgRuntime`, `RunContext`, `BackboneAdapter`, `RunWorkflowOptions`, `CapabilityInput`, `CapabilityOutput`, `JsonValue`, `ParsedYaml`, `CapabilityInstance`. Flow: load YAML → validate → bootstrap → (optional) connectBackbone → runWorkflow or start scheduler. See [docs/workflow-engine.md](docs/workflow-engine.md) for workflow API and scheduler.
 
 ## Full technical reference
@@ -36,6 +37,8 @@ For the **full class and type map**, and **all exported function/interface signa
 
 - [docs/workflow-engine.md](docs/workflow-engine.md) — Workflow engine: types, triggers, runWorkflow, templates, conditions, scheduler, traceability, kill.
 - [docs/capabilities.md](docs/capabilities.md) — Capabilities: depends_on, invokeCapability, types, loading.
+- [docs/build-flow.md](docs/build-flow.md) — Build flow: daof build architecture (Planner, review gate, Generator, merge, Verifier, retry); org-level agents and event mode.
+- [docs/build-events.md](docs/build-events.md) — Build events: build.requested, build.replies, payloads, and build_on_request workflow.
 - [docs/backbone.md](docs/backbone.md) — Backbone (queues): adapter interface, Redis, semaphore/run registry keyspaces.
 - [docs/providers.md](docs/providers.md) — Provider service layer: LLMProviderService, getProviderService, Cursor implementation.
 - [docs/authentication.md](docs/authentication.md) — Auth strategies for external capabilities.

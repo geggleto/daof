@@ -12,6 +12,12 @@ import { createMetricsFetcherInstance } from "./metrics_fetcher.js";
 import { createFileUploaderInstance } from "./file_uploader.js";
 import { createTweetPostRecordInstance } from "./tweet_post_record.js";
 import { createTweetMetricsProcessorInstance } from "./tweet_metrics_processor.js";
+import { createProducePrdInstance } from "./produce_prd.js";
+import { createGenerateYamlInstance } from "./generate_yaml.js";
+import { createMergeAndWriteInstance } from "./merge_and_write.js";
+import { createVerifyBuildInstance } from "./verify_build.js";
+import { createVerifySimilarityInstance } from "./verify_similarity.js";
+import { createBuildReplyInstance } from "./build_reply.js";
 
 export type BundledCapabilityFactory = (
   capabilityId: string,
@@ -31,6 +37,12 @@ const registry: Record<string, BundledCapabilityFactory> = {
   file_uploader: createFileUploaderInstance,
   tweet_post_record: createTweetPostRecordInstance,
   tweet_metrics_processor: createTweetMetricsProcessorInstance,
+  produce_prd: createProducePrdInstance,
+  generate_yaml: createGenerateYamlInstance,
+  merge_and_write: createMergeAndWriteInstance,
+  verify_build: createVerifyBuildInstance,
+  verify_similarity: createVerifySimilarityInstance,
+  build_reply: createBuildReplyInstance,
 };
 
 /**

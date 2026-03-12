@@ -11,9 +11,19 @@
 
 Build autonomous AI organizations with one YAML file. No glue code. No babysitting.
 
+### Install
+
+```bash
+npm install -g daof
+```
+
+Or use it in a project: `npm install daof` and run via `npx daof` or `node_modules/.bin/daof`. Requires Node 20+.
+
 ### Usage
 
-DAOF is used from the command line: `daof validate`, `daof run`, and `daof kill`. There is no server or library API for MVP; run everything via the `daof` CLI.
+DAOF is used from the command line: `daof validate`, `daof run`, `daof kill`, and `daof build`. There is no server or library API for MVP; run everything via the `daof` CLI.
+
+**Generating capabilities:** Use `daof build "<description>"` to generate capabilities, workflows, and agents from a natural-language description. The Planner produces a PRD, you review (y/n), then the Generator merges new definitions into your org manifest (default: `org.yaml` in the current directory). Use `--yolo` to skip the review step. See [docs/capabilities.md](docs/capabilities.md#generating-capabilities).
 
 **For AI agents:** Before editing or reasoning about this codebase, read [AGENTS.md](AGENTS.md). It describes the project structure and points to the full API reference with types and signatures.
 
@@ -257,6 +267,80 @@ daof run org.yaml
 To run a single workflow once: `daof run org.yaml --workflow hourly_metrics`.
 
 That's it. Your agents are now alive, talking over queues, persisting state, checking each other for sanity, and doing real work.
+
+### Extend the framework
+```bash
+node dist/cli/index.js build "Add a capability that allows an agent to write principal level frontend code" \
+  --file org.example.yaml \          
+  --yolo --bundle
+✔ Planner done.
+--- PRD ---
+---
+
+## PRD: Principal-Level Frontend Code Writer
+
+### Summary
+
+Add a capability that enables an agent to generate production-grade, architecturally sound frontend code at a principal-engineer level of quality. This includes component architecture, state management, accessibility, performance optimization, and adherence to modern frontend best practices.
+
+### What will be generated
+
+#### Capabilities (1 new)
+
+| ID | Type | Description |
+|----|------|-------------|
+| `frontend_code_writer` | skill | Accepts a task description (and optional tech stack, constraints, existing code context) and produces principal-quality frontend code. The prompt template enforces principal-engineer standards: component decomposition, semantic HTML, accessibility (WCAG 2.1 AA), performance-conscious rendering, proper TypeScript typing, idiomatic state management, error boundaries, and test scaffolding. Uses `config.endpoint` (same LLM provider as org) for generation. |
+
+**Prompt emphasis areas** (encoded in the skill prompt template):
+- Clean component architecture with single-responsibility, composability, and clear prop contracts.
+- TypeScript strict mode; no `any` types; discriminated unions where appropriate.
+- Accessibility-first markup (ARIA, keyboard navigation, focus management).
+- Performance patterns (memoization, lazy loading, virtualization guidance when relevant).
+- Idiomatic CSS/styling approach (CSS modules, Tailwind, or styled-components — caller-specified).
+- Error handling (error boundaries, graceful degradation, loading/empty states).
+- Testability (co-located test outline or hook extraction for unit testing).
+
+**Inputs:**
+- `task` (required) — natural-language description of the frontend feature or component.
+- `stack` (optional) — framework/library preferences (e.g. `"React 18, TypeScript, Tailwind"`). Defaults to React + TypeScript.
+- `context` (optional) — existing code or architectural context to align with.
+- `constraints` (optional) — additional constraints (e.g. `"must support SSR"`, `"no external state library"`).
+
+**Output:** `{ text }` — the generated code with inline explanations of architectural decisions where non-obvious.
+
+#### Agents (1 new)
+
+| ID | Role | Capabilities | Description |
+|----|------|-------------|-------------|
+| `frontend_engineer` | Principal Frontend Engineer | `frontend_code_writer`, `logger` | Writes production-grade frontend code on demand. Can be assigned to workflow steps that require frontend implementation. |
+
+#### Workflows (0 new)
+
+No new workflow is proposed. The `frontend_engineer` agent and `frontend_code_writer` capability are available for use in existing or future workflows. Users can invoke the agent in any workflow step via `action: frontend_code_writer`.
+
+### Existing capabilities reused
+
+- `logger` — attached to the new agent for observability.
+- `text_generator` — **not** depended on directly; the skill uses its own `config.endpoint` for LLM calls (same pattern).
+
+### Out of scope
+
+- File-system write (the capability returns code as text; a separate capability or workflow step handles persistence).
+- Automated test execution or CI integration.
+- Backend code generation.
+-----------
+✔ Generator done.
+✔ Similarity check done.
+✔ Generator done.
+✔ Similarity check done.
+✔ Generator done.
+✔ Similarity check done.
+✔ Generator done.
+✔ Similarity check done.
+✔ Merge done. Added 2 definition(s).
+✔ Verifier pass.
+Added 2 capability/agent/workflow definition(s) to org.example.yaml.
+```
 
 ### Documentation
 

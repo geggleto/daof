@@ -1,21 +1,17 @@
-# DAOF Manifest - v1.0
-# Validate with: daof validate org.example.yaml
-
 version: "1.0"
 org:
   name: YGGMarketing
-  description: >-
-    Autonomous marketing team for YGG games. Generates content, posts to X, tracks engagement.
+  description: Autonomous marketing team for YGG games. Generates content, posts
+    to X, tracks engagement.
   goals:
     - maximize_organic_engagement
     - stay_under_monthly_budget: 1500
     - maintain_brand_compliance
-
 agents:
   ceo:
     provider: cursor
     model: auto
-    role: "Chief Executive Officer"
+    role: Chief Executive Officer
     description: Oversees budget, approves major strategies, monitors KPIs
     capabilities:
       - name: logger
@@ -24,81 +20,111 @@ agents:
       - name: gitactor_scanner
     fallback: ceo_backup
     max_concurrent_tasks: 3
-
   cmo:
     provider: cursor
     model: auto
-    role: "Chief Marketing Officer"
+    role: Chief Marketing Officer
     description: Defines per-game content strategy and asset volume
     capabilities:
       - name: generate_strategy
       - name: image_gen
       - name: gitactor_scanner
     max_concurrent_tasks: 5
-
   content_writer:
     provider: cursor
     model: auto
-    role: "Content Writer"
+    role: Content Writer
     description: Generates captions, threads, blog posts
     capabilities:
       - name: gitactor_scanner
       - name: text_formatter
       - name: write_post
-
   content_designer:
     provider: cursor
     model: auto
-    role: "Content Designer"
+    role: Content Designer
     description: Creates images & short videos
     capabilities:
       - name: image_gen
       - name: video_gen_short
       - name: gitactor_scanner
       - name: generate_assets
-
   visual_qa:
     provider: cursor
     model: auto
-    role: "Visual Quality Assurance"
+    role: Visual Quality Assurance
     description: Reviews visuals for branding, errors, relevance
     capabilities:
       - name: gitactor_scanner
       - name: review_assets
-
   compliance_qa:
     provider: cursor
     model: auto
-    role: "Compliance & Legal QA"
+    role: Compliance & Legal QA
     description: Checks for IP, spoilers, brand safety, legal risk
     capabilities:
       - name: gitactor_scanner
       - name: final_compliance_check
-
   content_manager:
     provider: cursor
     model: auto
-    role: "Content Manager"
+    role: Content Manager
     description: Assembles final posts and publishes
     capabilities:
       - name: post_to_x
       - name: schedule_post
       - name: gitactor_scanner
       - name: assemble_and_post
-
   data_analyst:
     provider: cursor
     model: auto
-    role: "Data Analyst"
+    role: Data Analyst
     description: Collects X metrics hourly, generates insights
     capabilities:
       - name: get_x_metrics
       - name: upsert_metric
       - name: generate_report
       - name: collect_metrics
-
-# depends_on: optional list of capability ids this capability may call at runtime via
-# runContext.invokeCapability(capabilityId, input). Each id must exist in this capabilities map.
+  planner:
+    provider: cursor
+    model: auto
+    role: Build Planner
+    description: Produces PRD from user description for daof build (event build.requested)
+    capabilities:
+      - name: produce_prd
+  generator:
+    provider: cursor
+    model: auto
+    role: Build Generator
+    description: Generates capabilities/agents/workflows YAML from PRD
+    capabilities:
+      - name: generate_yaml
+  builder:
+    provider: cursor
+    model: auto
+    role: Build Merger
+    description: Merges generated YAML into org file and publishes build reply
+    capabilities:
+      - name: merge_and_write
+      - name: build_reply
+  verifier:
+    provider: cursor
+    model: auto
+    role: Build Verifier
+    description: Verifies build output against PRD (event build.requested)
+    capabilities:
+      - name: verify_build
+  frontend_engineer:
+    provider: cursor
+    model: auto
+    role: Principal Frontend Engineer
+    description: Writes production-grade, architecturally sound frontend code on
+      demand. Enforces principal-engineer standards including accessibility,
+      performance, strict typing, and test scaffolding. Can be assigned to any
+      workflow step that requires frontend implementation.
+    capabilities:
+      - name: frontend_code_writer
+      - name: logger
 capabilities:
   logger:
     type: tool
@@ -111,7 +137,6 @@ capabilities:
   webhook_notifier:
     type: tool
     description: HTTP POST to a webhook URL (bundled)
-
   key_value_store:
     type: tool
     description: Get/set/delete by key (bundled; Redis or in-memory)
@@ -119,19 +144,19 @@ capabilities:
     type: tool
     description: Generate images via HTTP endpoint (bundled)
     config:
-      endpoint: "https://your-flux-endpoint.hf.space"
+      endpoint: https://your-flux-endpoint.hf.space
       api_key: env(HF_API_KEY)
   text_generator:
     type: tool
     description: Generate text via LLM endpoint (bundled)
     config:
-      endpoint: "https://api.example.com/complete"
+      endpoint: https://api.example.com/complete
       api_key: env(LLM_API_KEY)
   sentiment_analyzer:
     type: tool
     description: Sentiment score via endpoint (bundled)
     config:
-      endpoint: "https://api.example.com/sentiment"
+      endpoint: https://api.example.com/sentiment
       api_key: env(SENTIMENT_API_KEY)
   x_poster:
     type: tool
@@ -145,34 +170,31 @@ capabilities:
     type: tool
     description: Fetch X/GA4 metrics (bundled)
     config:
-      endpoint: "https://api.twitter.com/2/tweets"
+      endpoint: https://api.twitter.com/2/tweets
       api_key: env(X_API_KEY)
   file_uploader:
     type: tool
     description: Upload file to local or S3 (bundled; S3 stub)
     config:
-      base_path: "./uploads"
-
+      base_path: ./uploads
   image_gen:
     type: tool
     description: Generate images using Hugging Face endpoint
     config:
-      endpoint: "https://your-flux-endpoint.hf.space"
+      endpoint: https://your-flux-endpoint.hf.space
       api_key: env(HF_API_KEY)
       default_batch_size: 5
       max_batch_size: 20
     persistence: sql_events
-
   gitactor_scanner:
     type: tool
     description: Security & quality scan using gitactor.dev
     config:
-      endpoint: "http://localhost:3000/scan"
+      endpoint: http://localhost:3000/scan
       api_key: env(GITACTOR_API_KEY)
       default_mode: full
       auto_reject_threshold: 60
     persistence: sql_events
-
   post_to_x:
     type: tool
     description: Publish content to X
@@ -182,7 +204,6 @@ capabilities:
       access_token: env(X_ACCESS_TOKEN)
       access_secret: env(X_ACCESS_SECRET)
     rate_limit: 3 per minute
-
   check_budget:
     type: tool
     description: Check budget status
@@ -232,7 +253,115 @@ capabilities:
   collect_metrics:
     type: tool
     description: Collect metrics
+  produce_prd:
+    type: tool
+    description: Planner; produce PRD from description (bundled)
+  generate_yaml:
+    type: tool
+    description: Generator; produce capabilities/agents/workflows YAML (bundled)
+  merge_and_write:
+    type: tool
+    description: Merge generated YAML into org file and write (bundled)
+  verify_build:
+    type: tool
+    description: Verifier; compare output to PRD, output pass/fail (bundled)
+  build_reply:
+    type: tool
+    description: Publish build result to build.replies queue (bundled)
+    config:
+      queue: build.replies
+  frontend_code_writer:
+    type: skill
+    description: Accepts a task description (and optional tech stack, constraints,
+      existing code context) and produces principal-engineer-quality frontend
+      code. Enforces component decomposition, semantic HTML, WCAG 2.1 AA
+      accessibility, performance-conscious rendering, strict TypeScript typing,
+      idiomatic state management, error boundaries, and test scaffolding.
+    config:
+      endpoint: env(LLM_ENDPOINT)
+      api_key: env(LLM_API_KEY)
+    prompt: >-
+      You are a principal-level frontend engineer. Generate production-grade
+      frontend code for the following task. Your output must meet every standard
+      below.
 
+
+      == TASK ==
+
+      {{ task }}
+
+
+      == TECH STACK ==
+
+      {{ stack }}
+
+      If no stack is specified, default to React 18 with TypeScript and CSS
+      Modules.
+
+
+      == EXISTING CONTEXT ==
+
+      {{ context }}
+
+
+      == CONSTRAINTS ==
+
+      {{ constraints }}
+
+
+      == STANDARDS (mandatory) ==
+
+      1. Component Architecture: Single-responsibility components. Compose via
+      props and
+         children. Clear prop contracts with explicit TypeScript interfaces. Barrel exports
+         where appropriate.
+
+      2. TypeScript: Strict mode. No `any`. Use discriminated unions for variant
+      state.
+         Prefer `as const` assertions and template literal types where they add clarity.
+
+      3. Accessibility (WCAG 2.1 AA): Semantic HTML elements over generic divs.
+      ARIA
+         attributes only when native semantics are insufficient. Keyboard navigation and
+         visible focus indicators. Announce dynamic content changes with live regions.
+         Provide skip links and logical heading hierarchy.
+
+      4. Performance: Memoize expensive computations (useMemo) and stable
+      callbacks
+         (useCallback) only where profiling justifies it. Lazy-load heavy routes and
+         components via React.lazy/Suspense. Suggest virtualization (e.g. react-window)
+         when rendering large lists. Avoid layout thrashing and unnecessary re-renders.
+
+      5. Styling: Use the styling approach specified in the stack (CSS Modules,
+      Tailwind,
+         or styled-components). Maintain design-token consistency. Support dark mode via
+         CSS custom properties or class strategy when relevant.
+
+      6. Error Handling: Wrap feature boundaries with React error boundaries.
+      Implement
+         graceful degradation: loading skeletons, empty states, and user-friendly error
+         messages. Never swallow errors silently.
+
+      7. State Management: Use idiomatic patterns for the chosen stack
+      (useState/useReducer
+         for local state, context for cross-cutting concerns, external store only if
+         constraints allow). Lift state only as high as necessary.
+
+      8. Testability: Export pure logic into custom hooks or utility functions
+      for unit
+         testing. Include a co-located test outline (describe/it blocks with intent
+         comments) for every exported component or hook.
+
+      9. Code Organization: Group by feature, not by type. Co-locate component,
+      styles,
+         tests, and types. Use index files for public API of each feature module.
+
+
+      == OUTPUT FORMAT ==
+
+      Return the complete implementation code. Where an architectural decision
+      is non-obvious, add a brief inline comment explaining the rationale.
+      Separate each file with a header comment: // --- file: <relative-path> ---
 workflows:
   daily_content_cycle:
     trigger: cron(0 9 * * *)
@@ -257,15 +386,46 @@ workflows:
         action: final_compliance_check
       - agent: content_manager
         action: assemble_and_post
-        condition: "{{ visual_qa.verdict == 'approve' && compliance_qa.verdict == 'approve' }}"
-
+        condition: "{{ visual_qa.verdict == 'approve' && compliance_qa.verdict ==
+          'approve' }}"
   hourly_metrics:
     trigger: cron(0 * * * *)
     description: Pull X metrics and store
     steps:
       - agent: data_analyst
         action: collect_metrics
-
+  build_on_request:
+    trigger: event(build.requested)
+    description: "Self-upgrade; run Planner, Generator, merge, Verifier, reply.
+      Payload: description, request_id, org_path?, existing_capabilities?"
+    steps:
+      - agent: planner
+        action: produce_prd
+        params:
+          description: "{{ __initial.description }}"
+      - agent: generator
+        action: generate_yaml
+        params:
+          description: "{{ __initial.description }}"
+          prd: "{{ planner.prd }}"
+          existing_capabilities: "{{ __initial.existing_capabilities }}"
+      - agent: builder
+        action: merge_and_write
+        params:
+          org_path: "{{ __initial.org_path }}"
+          generated_yaml: "{{ generator.yaml }}"
+      - agent: verifier
+        action: verify_build
+        params:
+          prd: "{{ planner.prd }}"
+          summary: "{{ builder.summary }}"
+      - agent: builder
+        action: build_reply
+        params:
+          request_id: "{{ __initial.request_id }}"
+          success: "{{ verifier.pass }}"
+          prd: "{{ planner.prd }}"
+          added_count: "{{ builder.added_count }}"
 backbone:
   type: redis
   config:
@@ -275,7 +435,8 @@ backbone:
         type: pubsub
       - name: dlq
         type: fifo
-
+      - name: build.replies
+        type: fifo
 fault_tolerance:
   health_checks_interval: 5m
   rogue_detection:
@@ -290,4 +451,6 @@ fault_tolerance:
   dead_letter_queue: true
   alerts:
     webhook: env(ALERT_WEBHOOK_URL)
-    channels: [slack, email]
+    channels:
+      - slack
+      - email

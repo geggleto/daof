@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { ZodError } from "zod";
 import { Command } from "commander";
 import { loadYaml, validate } from "../parser/index.js";
+import { runBuild } from "../build/index.js";
 import { bootstrap, connectBackbone } from "../runtime/bootstrap.js";
 import { runWorkflow } from "../workflow/executor.js";
 import { runScheduler } from "../runtime/run-org.js";
@@ -65,7 +66,7 @@ runCmd.action(async (file: string) => {
   try {
     const raw = loadYaml(file);
     const config = validate(raw);
-    const runtime = bootstrap(config);
+    const runtime = await bootstrap(config);
 
     await connectBackbone(runtime);
 
@@ -135,6 +136,44 @@ runCmd.action(async (file: string) => {
         console.error("  -", JSON.stringify(issue));
       }
     }
+    process.exit(1);
+  }
+});
+
+const buildCmd = program
+  .command("build")
+  .description("Generate capabilities/workflows/agents from a description (Planner, review, generate, Verifier).")
+  .argument("<description>", "Description of what to build")
+  .option("--file <path>", "Org manifest to update (default: org.yaml in cwd)", "org.yaml")
+  .option("--yolo", "Skip PRD review and proceed immediately")
+  .option("--provider <id>", "LLM provider (default: cursor)", "cursor")
+  .option("--via-events", "Publish build.requested and wait for reply from running org (requires daof run; no review)")
+  .option("--no-codegen", "Disable capability source code generation (codegen is on by default)")
+  .option("--codegen-dir <path>", "Directory for generated capability sources (default: generated/capabilities)", "generated/capabilities")
+  .option("--bundle", "Add generated capability to framework source (src/capabilities/bundled) and register in index; requires running from repo root")
+  .option("-v, --verbose", "Verbosity; use -vv for parse/summary, -vvv for raw LLM output", (v: string, prev: number) => prev + 1, 0);
+
+buildCmd.action(async (description: string) => {
+  const opts = buildCmd.opts() as { file?: string; yolo?: boolean; provider?: string; viaEvents?: boolean; verbose?: number; noCodegen?: boolean; codegenDir?: string; bundle?: boolean };
+  const orgFilePath = opts.file ?? "org.yaml";
+    const result = await runBuild(description, {
+      orgFilePath,
+      yolo: opts.yolo ?? false,
+      providerId: opts.provider ?? "cursor",
+      viaEvents: opts.viaEvents ?? false,
+      verbose: opts.verbose ?? 0,
+      noCodegen: opts.noCodegen ?? false,
+      codegenDir: opts.codegenDir ?? "generated/capabilities",
+      bundle: opts.bundle ?? false,
+    });
+    if (result.success) {
+      const count = result.addedCount ?? 0;
+      if (count > 0) {
+        console.log(`Added ${count} capability/agent/workflow definition(s) to ${orgFilePath}.`);
+      }
+      process.exit(0);
+  } else {
+    console.error("Build failed:", result.error?.message ?? "Unknown error");
     process.exit(1);
   }
 });

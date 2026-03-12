@@ -26,9 +26,9 @@ export interface OrgRuntime {
  * Load an org from validated config: resolve env refs, load capabilities, bootstrap agents.
  * Does not connect to backbone or start workflows.
  */
-export function bootstrap(config: OrgConfig): OrgRuntime {
+export async function bootstrap(config: OrgConfig): Promise<OrgRuntime> {
   const resolved = resolveEnv(config);
-  const capabilities = loadCapabilities(resolved);
+  const capabilities = await loadCapabilities(resolved);
   const agents = bootstrapAgents(resolved, capabilities);
   return {
     config: resolved,

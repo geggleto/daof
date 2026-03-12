@@ -1,0 +1,40 @@
+version: "1.0"
+org:
+  name: Scaffold
+  description: Org created by daof build (scaffold)
+  goals: []
+agents:
+  greeter:
+    provider: cursor
+    model: auto
+    role: Greeter
+    description: Lightweight agent responsible for producing and persisting greetings
+    capabilities:
+      - name: write_greeting
+      - name: logger
+capabilities:
+  write_greeting:
+    type: tool
+    description: Accepts a name (string, optional, defaults to "World") and a
+      file_path (string, optional, defaults to "./greeting.txt"). Writes "Hello,
+      {name}!" to the specified file path. Returns { file_path, greeting } on
+      success.
+    source: generated/capabilities/write_greeting.ts
+workflows:
+  greet_to_file:
+    trigger: manual
+    description: "Write a greeting to a file on demand. Invoke with: daof run
+      org.example.yaml --workflow greet_to_file"
+    steps:
+      - agent: greeter
+        action: write_greeting
+        params:
+          name: "{{ __initial.name }}"
+          file_path: "{{ __initial.file_path }}"
+backbone:
+  type: redis
+  config:
+    url: redis://localhost:6379
+    queues:
+      - name: events
+        type: pubsub

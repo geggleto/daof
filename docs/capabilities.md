@@ -4,9 +4,15 @@ Capabilities are reusable building blocks (tools, skills, or hybrids) that agent
 
 ---
 
+## Generating capabilities
+
+Use **`daof build "<description>"`** to generate capabilities, workflows, and agents from a natural-language description. The flow: a **Planner** produces a PRD from your prompt; you are asked to proceed (y/n) unless you pass **`--yolo`**; then a **Generator** produces YAML definitions; a **similarity check** (capability `verify_similarity`) runs to avoid duplicate or near-duplicate capabilities/agents; then definitions are merged into your org manifest (default: **`org.yaml`** in the current directory; override with **`--file <path>`**). **Codegen** is on by default: for each new **tool** capability (not bundled and not a skill), the build generates TypeScript implementation source under **`--codegen-dir`** (default `generated/capabilities`), sets the capability’s **`source`** in the manifest, and re-writes the org file. Run **`npm run build`** to compile and include the new capabilities. Use **`--no-codegen`** to disable codegen. With **`--bundle`**, generated tool capabilities are written into the framework (**`src/capabilities/bundled/<id>.ts`**) and the bundled index is updated so the capability is resolved as a bundled capability (no **`source`** in the org); you must run from the **DAOF repo root**. See [build-flow.md](build-flow.md#--bundle-add-capability-to-framework-source). A **Verifier** checks the result against the PRD; on failure the build retries up to 5 times. The same LLM provider as workflows is used (e.g. Cursor; set `CURSOR_API_KEY`). Capabilities with **`source`** are loaded at runtime via dynamic import (path relative to process cwd). Prefer **skills** for prompt/LLM-driven behavior when you don’t need custom tool code.
+
+---
+
 ## Capability types
 
-- **tool:** Executable tools (HTTP, logging, key-value store, etc.). Bundled implementations or inline-tool adapter.
+- **tool:** Executable tools (HTTP, logging, key-value store, etc.). Bundled implementations, **source** (generated or repo), or inline-tool adapter.
 - **skill:** Prompt-template capability. Uses a `prompt` string with `{{ key }}` (or `{{ key.nested }}`) placeholders resolved from input; optionally calls an LLM at `config.endpoint` (same pattern as text_generator). Skills can use **depends_on** and **invokeCapability** like tools (e.g. a skill that composes a logger or another skill).
 - **hybrid:** Reserved for future use.
 
