@@ -4,7 +4,7 @@ This file is the single entry point for AI agents working on this codebase. Read
 
 ## Purpose
 
-DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizations from a single YAML manifest. You define agents, capabilities (tools/skills), workflows (cron or event-triggered), backbone (queues), and fault tolerance in YAML; the runtime bootstraps and executes workflows. **Intended use is CLI-only** for end users: `daof validate`, `daof run`, `daof kill`, `daof build "<description>"`. Programmatic use (e.g. `loadYaml`, `validate`, `bootstrap`, `runWorkflow`) exists for integration or tooling but is not the supported end-user interface for the MVP.
+DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizations from a single YAML manifest. You define agents, capabilities (tools/skills), workflows (cron or event-triggered), backbone (queues), and fault tolerance in YAML; the runtime bootstraps and executes workflows. **Intended use is CLI-only** for end users: `daof validate`, `daof run`, `daof kill`, `daof build "<description>"`, `daof plan [description]`. Programmatic use (e.g. `loadYaml`, `validate`, `bootstrap`, `runWorkflow`) exists for integration or tooling but is not the supported end-user interface for the MVP.
 
 ## Repository layout
 
@@ -26,7 +26,7 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 
 ## Key entry points
 
-- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`, `daof build "<description>" [--file <path>] [--yolo] [--provider <id>] [--via-events]` (generate capabilities/workflows/agents and merge into org; use --via-events to trigger build via backbone events when org is running).
+- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`, `daof plan [description] [--file <path>] [--provider <id>] [--no-edit] [--execute]` (interactive Planner-only: develop a PRD, optionally revise/save/execute), `daof build "<description>" [--file <path>] [--yolo] [--provider <id>] [--via-events]` (generate capabilities/workflows/agents and merge into org; use --via-events to trigger build via backbone events when org is running).
 - **Programmatic:** [src/index.ts](src/index.ts) — `loadYaml`, `validate`, `bootstrap`, `connectBackbone`, `runWorkflow`, `createBackbone`, `createAppCircuitBreaker`; types: `OrgConfig`, `OrgRuntime`, `RunContext`, `BackboneAdapter`, `RunWorkflowOptions`, `CapabilityInput`, `CapabilityOutput`, `JsonValue`, `ParsedYaml`, `CapabilityInstance`. Flow: load YAML → validate → bootstrap → (optional) connectBackbone → runWorkflow or start scheduler. See [docs/workflow-engine.md](docs/workflow-engine.md) for workflow API and scheduler.
 
 ## Full technical reference

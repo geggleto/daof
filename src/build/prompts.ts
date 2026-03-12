@@ -7,6 +7,18 @@ export function promptPlanner(description: string): string {
 User request: ${description}`;
 }
 
+/**
+ * Prompt for revising an existing PRD from user feedback (used by daof plan interactive loop).
+ */
+export function promptPlannerRevise(prd: string, userFeedback: string): string {
+  return `You are a Planner for the DAOF (Declarative Agentic Orchestration Framework). Here is the current Product Requirements Document (PRD). The user wants the following changes. Produce the full updated PRD (replace the previous one). Output only the PRD text, no code.
+
+Current PRD:
+${prd}
+
+User-requested changes: ${userFeedback}`;
+}
+
 export function promptGenerator(
   description: string,
   prd: string,

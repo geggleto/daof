@@ -21,7 +21,9 @@ Or use it in a project: `npm install daof` and run via `npx daof` or `node_modul
 
 ### Usage
 
-DAOF is used from the command line: `daof validate`, `daof run`, `daof kill`, and `daof build`. There is no server or library API for MVP; run everything via the `daof` CLI.
+DAOF is used from the command line: `daof validate`, `daof run`, `daof kill`, `daof plan`, and `daof build`. There is no server or library API for MVP; run everything via the `daof` CLI.
+
+**Planning interactively:** Use `daof plan [description]` to run only the Planner and interactively refine a PRD. You can revise the PRD (via natural-language feedback), save it to a file, or execute the full build with the current PRD. Use `--no-edit` for a one-shot PRD (no loop); add `--execute` to run the full build with that PRD.
 
 **Generating capabilities:** Use `daof build "<description>"` to generate capabilities, workflows, and agents from a natural-language description. The Planner produces a PRD, you review (y/n), then the Generator merges new definitions into your org manifest (default: `org.yaml` in the current directory). Use `--yolo` to skip the review step. See [docs/capabilities.md](docs/capabilities.md#generating-capabilities).
 

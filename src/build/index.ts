@@ -17,7 +17,7 @@ import {
   writeOrgFile,
 } from "../parser/index.js";
 import type { ParsedYaml } from "../types/json.js";
-import { promptPlanner, promptGenerator, promptVerifier } from "./prompts.js";
+import { promptPlanner, promptPlannerRevise, promptGenerator, promptVerifier } from "./prompts.js";
 import {
   extractYamlFromMarkdown,
   looksLikeYamlContent,
@@ -62,6 +62,8 @@ export interface RunBuildOptions {
   yolo: boolean;
   providerId: string;
   viaEvents?: boolean;
+  /** When set, skip the Planner step and use this PRD; continue from review gate. */
+  initialPrd?: string;
   /** Verbosity: 0 = normal, 1 = PRD always shown, 2 = generator/verifier summary, 3 = raw LLM responses */
   verbose?: number;
   /** Disable capability codegen (default: codegen is on). */
@@ -70,6 +72,68 @@ export interface RunBuildOptions {
   codegenDir?: string;
   /** Add generated capability to framework source (src/capabilities/bundled) and register in index; requires running from repo root. */
   bundle?: boolean;
+}
+
+export interface RunPlannerOptions {
+  runtime: OrgRuntime;
+  providerId: string;
+  verbose?: number;
+}
+
+/**
+ * Run the Planner only (agent or direct LLM). Returns PRD text or throws.
+ * Used by runBuild and by the daof plan CLI.
+ */
+export async function runPlanner(description: string, options: RunPlannerOptions): Promise<string> {
+  const { runtime, providerId, verbose = 0 } = options;
+  const useAgents = hasBuildAgents(runtime);
+  if (useAgents) {
+    return runPlannerAgent(runtime, description);
+  }
+  const service = getProviderService(providerId, getProviderApiKey(providerId));
+  if (!service) {
+    throw new Error(
+      `Planner requires a provider (e.g. ${providerId}) with API key. Set ${providerId === "cursor" ? "CURSOR_API_KEY" : "provider API key"} in the environment.`
+    );
+  }
+  const plannerResult = await service.complete(promptPlanner(description), { max_tokens: 1500 });
+  if (!plannerResult || ("ok" in plannerResult && plannerResult.ok === false)) {
+    throw new Error(
+      "ok" in plannerResult && plannerResult.ok === false ? (plannerResult as { error?: string }).error : "Planner failed"
+    );
+  }
+  const prd = ("text" in plannerResult ? plannerResult.text : "").trim();
+  if (!prd) throw new Error("Planner returned empty PRD.");
+  if (verbose >= 1) console.error("[build] Planner done.");
+  return prd;
+}
+
+/**
+ * Revise an existing PRD from user feedback (direct LLM only). Returns updated PRD or throws.
+ * Used by daof plan interactive loop.
+ */
+export async function runPlannerRevise(
+  prd: string,
+  userFeedback: string,
+  options: { providerId: string; verbose?: number }
+): Promise<string> {
+  const { providerId, verbose = 0 } = options;
+  const service = getProviderService(providerId, getProviderApiKey(providerId));
+  if (!service) {
+    throw new Error(
+      `Planner revise requires a provider (e.g. ${providerId}) with API key. Set ${providerId === "cursor" ? "CURSOR_API_KEY" : "provider API key"} in the environment.`
+    );
+  }
+  const result = await service.complete(promptPlannerRevise(prd, userFeedback), { max_tokens: 1500 });
+  if (!result || ("ok" in result && result.ok === false)) {
+    throw new Error(
+      "ok" in result && result.ok === false ? (result as { error?: string }).error : "Planner revise failed"
+    );
+  }
+  const revised = ("text" in result ? result.text : "").trim();
+  if (!revised) throw new Error("Planner returned empty PRD.");
+  if (verbose >= 1) console.error("[build] Planner revise done.");
+  return revised;
 }
 
 export interface RunBuildResult {
@@ -155,39 +219,25 @@ export async function runBuild(
     }
   }
 
-  // 2. Planner: generate PRD (agent or direct LLM)
+  // 2. Planner: generate PRD (or use initialPrd when provided)
   let prd: string;
-  const plannerSpinner = ora("Planning…").start();
-  if (verbose >= 1) console.error("[build] Running planner...");
-  try {
-    if (useAgents) {
-      prd = await runPlannerAgent(runtime, description);
-    } else {
-      const service = getProviderService(providerId, getProviderApiKey(providerId))!;
-      const plannerResult = await service.complete(promptPlanner(description), { max_tokens: 1500 });
-      if (!plannerResult || ("ok" in plannerResult && plannerResult.ok === false)) {
-        plannerSpinner.fail("Planner failed.");
-        return {
-          success: false,
-          error: new Error("ok" in plannerResult && plannerResult.ok === false ? plannerResult.error : "Planner failed"),
-        };
-      }
-      prd = ("text" in plannerResult ? plannerResult.text : "").trim();
-      if (!prd) {
-        plannerSpinner.fail("Planner returned empty PRD.");
-        return { success: false, error: new Error("Planner returned empty PRD.") };
-      }
+  if (options.initialPrd) {
+    prd = options.initialPrd;
+    if (verbose >= 1) console.error("[build] Using provided initial PRD.");
+  } else {
+    const plannerSpinner = ora("Planning…").start();
+    if (verbose >= 1) console.error("[build] Running planner...");
+    try {
+      prd = await runPlanner(description, { runtime, providerId, verbose });
+      plannerSpinner.succeed("Planner done.");
+    } catch (err) {
+      plannerSpinner.fail("Planner failed.");
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
     }
-    plannerSpinner.succeed("Planner done.");
-    if (verbose >= 1) console.error("[build] Planner done.");
-  } catch (err) {
-    plannerSpinner.fail("Planner failed.");
-    return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    console.log("--- PRD ---");
+    console.log(prd);
+    console.log("-----------");
   }
-
-  console.log("--- PRD ---");
-  console.log(prd);
-  console.log("-----------");
 
   // 3. Review (unless yolo)
   if (!yolo) {

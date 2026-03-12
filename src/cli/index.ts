@@ -1,12 +1,17 @@
 #!/usr/bin/env node
+import * as readline from "node:readline";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import "../providers/register-providers.js";
 import "../backbone/register-backbones.js";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { ZodError } from "zod";
 import { Command } from "commander";
-import { loadYaml, validate } from "../parser/index.js";
-import { runBuild } from "../build/index.js";
+import { loadYaml, validate, writeOrgFile } from "../parser/index.js";
+import { runBuild, runPlanner, runPlannerRevise } from "../build/index.js";
+import { createScaffoldOrgConfig, isENOENT } from "../build/scaffold.js";
+import { getProviderApiKey, getProviderService } from "../providers/registry.js";
 import { bootstrap, connectBackbone } from "../runtime/bootstrap.js";
 import { runWorkflow } from "../workflow/executor.js";
 import { runScheduler } from "../runtime/run-org.js";
@@ -176,6 +181,182 @@ buildCmd.action(async (description: string) => {
   } else {
     console.error("Build failed:", result.error?.message ?? "Unknown error");
     process.exit(1);
+  }
+});
+
+function askQuestion(prompt: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve((answer ?? "").trim());
+    });
+  });
+}
+
+const planCmd = program
+  .command("plan")
+  .description("Interactively develop a PRD with the Planner; optionally execute the full build.")
+  .argument("[description]", "What to build (prompted if omitted)")
+  .option("--file <path>", "Org manifest path for context and execute (default: org.yaml)", "org.yaml")
+  .option("--provider <id>", "LLM provider (default: cursor)", "cursor")
+  .option("--no-edit", "One-shot: print PRD and exit (no interactive loop)")
+  .option("--execute", "With --no-edit: run full build with the generated PRD")
+  .option("-v, --verbose", "Verbosity", (v: string, prev: number) => prev + 1, 0);
+
+planCmd.action(async (descriptionArg: string) => {
+  const opts = planCmd.opts() as {
+    file?: string;
+    provider?: string;
+    noEdit?: boolean;
+    execute?: boolean;
+    verbose?: number;
+  };
+  const orgFilePath = opts.file ?? "org.yaml";
+  const providerId = opts.provider ?? "cursor";
+  const noEdit = opts.noEdit ?? false;
+  const execute = opts.execute ?? false;
+  const verbose = opts.verbose ?? 0;
+
+  let description = (descriptionArg ?? "").trim();
+  if (!description) {
+    description = await askQuestion("Describe what you want to build: ");
+    if (!description) {
+      console.error("No description provided. Exiting.");
+      process.exit(1);
+    }
+  }
+
+  let config: Awaited<ReturnType<typeof validate>>;
+  try {
+    const raw = loadYaml(orgFilePath);
+    config = validate(raw);
+  } catch (err) {
+    if (isENOENT(err)) {
+      config = createScaffoldOrgConfig();
+      try {
+        mkdirSync(dirname(orgFilePath), { recursive: true });
+        writeOrgFile(orgFilePath, config);
+        console.log(`Created scaffold org at ${orgFilePath}.`);
+      } catch (writeErr) {
+        console.error("Failed to write scaffold org:", writeErr instanceof Error ? writeErr.message : String(writeErr));
+        process.exit(1);
+      }
+    } else {
+      console.error("Validation failed:", err instanceof Error ? err.message : String(err));
+      if (err instanceof ZodError) {
+        for (const issue of err.issues) {
+          console.error("  -", JSON.stringify(issue));
+        }
+      }
+      process.exit(1);
+    }
+  }
+
+  const runtime = await bootstrap(config);
+  const apiKey = getProviderApiKey(providerId);
+  const service = getProviderService(providerId, apiKey);
+  if (!service) {
+    console.error(
+      `Planner requires a provider (e.g. ${providerId}) with API key. Set ${providerId === "cursor" ? "CURSOR_API_KEY" : "provider API key"} in the environment.`
+    );
+    process.exit(1);
+  }
+
+  let prd: string;
+  try {
+    prd = await runPlanner(description, { runtime, providerId, verbose });
+  } catch (err) {
+    console.error("Planner failed:", err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
+  console.log("--- PRD ---");
+  console.log(prd);
+  console.log("-----------");
+
+  if (noEdit) {
+    if (execute) {
+      const result = await runBuild(description, {
+        orgFilePath,
+        yolo: true,
+        providerId,
+        initialPrd: prd,
+        verbose,
+      });
+      if (result.success) {
+        const count = result.addedCount ?? 0;
+        if (count > 0) {
+          console.log(`Added ${count} capability/agent/workflow definition(s) to ${orgFilePath}.`);
+        }
+        process.exit(0);
+      } else {
+        console.error("Build failed:", result.error?.message ?? "Unknown error");
+        process.exit(1);
+      }
+    }
+    process.exit(0);
+  }
+
+  for (;;) {
+    const choice = await askQuestion("[r]evise  [e]xecute build  [s]ave  [q]uit: ");
+    const key = (choice ?? "").toLowerCase().trim() || choice;
+
+    if (key === "q" || key === "quit") {
+      console.log("Bye.");
+      process.exit(0);
+    }
+
+    if (key === "r" || key === "revise") {
+      const feedback = await askQuestion("Describe changes (e.g. add X, remove Y): ");
+      if (!feedback) {
+        console.log("No changes entered. Showing PRD again.");
+      } else {
+        try {
+          prd = await runPlannerRevise(prd, feedback, { providerId, verbose });
+          console.log("--- PRD ---");
+          console.log(prd);
+          console.log("-----------");
+        } catch (err) {
+          console.error("Revise failed:", err instanceof Error ? err.message : String(err));
+        }
+      }
+      continue;
+    }
+
+    if (key === "e" || key === "execute") {
+      const result = await runBuild(description, {
+        orgFilePath,
+        yolo: true,
+        providerId,
+        initialPrd: prd,
+        verbose,
+      });
+      if (result.success) {
+        const count = result.addedCount ?? 0;
+        if (count > 0) {
+          console.log(`Added ${count} capability/agent/workflow definition(s) to ${orgFilePath}.`);
+        }
+        process.exit(0);
+      } else {
+        console.error("Build failed:", result.error?.message ?? "Unknown error");
+      }
+      continue;
+    }
+
+    if (key === "s" || key === "save") {
+      const pathAnswer = await askQuestion(`Save PRD to path (default: prd.md): `);
+      const outPath = (pathAnswer ?? "").trim() || "prd.md";
+      try {
+        writeFileSync(outPath, prd, "utf8");
+        console.log(`Saved to ${outPath}.`);
+      } catch (err) {
+        console.error("Save failed:", err instanceof Error ? err.message : String(err));
+      }
+      continue;
+    }
+
+    console.log("Unknown option. Choose r, e, s, or q.");
   }
 });
 
