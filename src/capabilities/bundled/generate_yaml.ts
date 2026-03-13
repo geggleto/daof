@@ -43,7 +43,10 @@ export function createGenerateYamlInstance(
         };
       }
       const prompt = promptGenerator(description, prd, existingCapabilities);
-      const result = await service.complete(prompt, { max_tokens: 4000 });
+      const result = await service.complete(prompt, {
+        max_tokens: 4000,
+        model: agentLlm?.model ?? "auto",
+      });
       if (!result || ("ok" in result && result.ok === false)) {
         return {
           ok: false,

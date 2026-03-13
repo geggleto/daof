@@ -96,7 +96,10 @@ export async function runPlanner(description: string, options: RunPlannerOptions
       `Planner requires a provider (e.g. ${providerId}) with API key. Set ${providerId === "cursor" ? "CURSOR_API_KEY" : "provider API key"} in the environment.`
     );
   }
-  const plannerResult = await service.complete(promptPlanner(description), { max_tokens: 1500 });
+  const plannerResult = await service.complete(promptPlanner(description), {
+    max_tokens: 1500,
+    model: "auto",
+  });
   if (!plannerResult || ("ok" in plannerResult && plannerResult.ok === false)) {
     throw new Error(
       "ok" in plannerResult && plannerResult.ok === false ? (plannerResult as { error?: string }).error : "Planner failed"
@@ -124,7 +127,10 @@ export async function runPlannerRevise(
       `Planner revise requires a provider (e.g. ${providerId}) with API key. Set ${providerId === "cursor" ? "CURSOR_API_KEY" : "provider API key"} in the environment.`
     );
   }
-  const result = await service.complete(promptPlannerRevise(prd, userFeedback), { max_tokens: 1500 });
+  const result = await service.complete(promptPlannerRevise(prd, userFeedback), {
+    max_tokens: 1500,
+    model: "auto",
+  });
   if (!result || ("ok" in result && result.ok === false)) {
     throw new Error(
       "ok" in result && result.ok === false ? (result as { error?: string }).error : "Planner revise failed"
@@ -340,7 +346,10 @@ export async function runBuild(
           attempt > 0 ? `Retrying… (attempt ${attempt + 1}/${MAX_VERIFIER_RETRIES})` : `Generating… (attempt ${attempt + 1}/${MAX_VERIFIER_RETRIES})`
         ).start();
         if (verbose >= 1) console.error(`[build] Running generator (attempt ${attempt + 1}/${MAX_VERIFIER_RETRIES})...`);
-        const genResult = await service.complete(promptGenerator(description, prd, existingCapabilityIds), { max_tokens: 4000 });
+        const genResult = await service.complete(promptGenerator(description, prd, existingCapabilityIds), {
+          max_tokens: 4000,
+          model: "auto",
+        });
         genSpinner.succeed("Generator done.");
         if (verbose >= 1) console.error("[build] Generator done.");
         if (!genResult || ("ok" in genResult && genResult.ok === false)) {
@@ -466,7 +475,10 @@ export async function runBuild(
         }
         const verSpinner = ora("Verifying…").start();
         if (verbose >= 1) console.error("[build] Running verifier...");
-        const verifierResult = await service.complete(promptVerifier(prd, summary), { max_tokens: 50 });
+        const verifierResult = await service.complete(promptVerifier(prd, summary), {
+          max_tokens: 50,
+          model: "auto",
+        });
         const verifierText = (verifierResult && "text" in verifierResult ? verifierResult.text : "").trim().toUpperCase();
         if (verifierText.includes("PASS")) {
           verSpinner.succeed("Verifier pass.");

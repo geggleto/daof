@@ -32,7 +32,10 @@ export function createVerifyBuildInstance(
         };
       }
       const prompt = promptVerifier(prd, summary);
-      const result = await service.complete(prompt, { max_tokens: 50 });
+      const result = await service.complete(prompt, {
+        max_tokens: 50,
+        model: agentLlm?.model ?? "auto",
+      });
       if (!result || ("ok" in result && result.ok === false)) {
         return {
           ok: false,

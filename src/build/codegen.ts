@@ -30,7 +30,7 @@ export async function runCodegenForOne(
   for (let r = 0; r < CODEGEN_RETRIES; r++) {
     try {
       const prompt = promptCapabilityCodegen(id, description, configJson, dependsOn);
-      const result = await service.complete(prompt, { max_tokens: 4000 });
+      const result = await service.complete(prompt, { max_tokens: 4000, model: "auto" });
       if (!result || ("ok" in result && result.ok === false))
         throw new Error("ok" in result && result.ok === false ? result.error : "Codegen failed");
       const text = ("text" in result ? result.text : "").trim();

@@ -6,6 +6,6 @@
 export interface LLMProviderService {
   complete(
     prompt: string,
-    options?: { max_tokens?: number }
+    options?: { max_tokens?: number; model?: string }
   ): Promise<{ text: string } | { ok: false; error: string }>;
 }

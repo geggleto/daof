@@ -52,7 +52,10 @@ export function createVerifySimilarityInstance(
       }
 
       const prompt = promptSimilarity(payloadJson);
-      const result = await service.complete(prompt, { max_tokens: 1000 });
+      const result = await service.complete(prompt, {
+        max_tokens: 1000,
+        model: agentLlm?.model ?? "auto",
+      });
       if (!result || ("ok" in result && result.ok === false)) {
         return {
           ok: false,

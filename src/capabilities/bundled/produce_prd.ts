@@ -31,7 +31,10 @@ export function createProducePrdInstance(
         };
       }
       const prompt = promptPlanner(description);
-      const result = await service.complete(prompt, { max_tokens: 1500 });
+      const result = await service.complete(prompt, {
+        max_tokens: 1500,
+        model: agentLlm?.model ?? "auto",
+      });
       if (!result || ("ok" in result && result.ok === false)) {
         return {
           ok: false,

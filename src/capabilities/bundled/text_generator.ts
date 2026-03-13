@@ -70,7 +70,10 @@ export function createTextGeneratorInstance(
       if (!service) {
         return { ok: false, error: "Missing config.endpoint and no runContext.agentLlm (provider with API key) available." };
       }
-      return service.complete(prompt, { max_tokens: maxTokens });
+      return service.complete(prompt, {
+        max_tokens: maxTokens,
+        model: agentLlm?.model ?? "auto",
+      });
     },
   };
 }

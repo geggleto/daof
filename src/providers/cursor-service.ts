@@ -10,10 +10,14 @@ const DEFAULT_CURSOR_CLI_CMD = "agent";
  */
 export function createCursorProviderService(apiKey: string): LLMProviderService {
   return {
-    async complete(prompt: string): Promise<{ text: string } | { ok: false; error: string }> {
+    async complete(
+      prompt: string,
+      options?: { max_tokens?: number; model?: string }
+    ): Promise<{ text: string } | { ok: false; error: string }> {
       return new Promise((resolve) => {
         const cmd = process.env.CURSOR_CLI_CMD ?? DEFAULT_CURSOR_CLI_CMD;
-        const args = ["-p", prompt, "--output-format", "text", "--trust"];
+        const model = options?.model ?? "auto";
+        const args = ["--model", model, "-p", prompt, "--output-format", "text", "--trust"];
         const env = { ...process.env, CURSOR_API_KEY: apiKey };
         const child = spawn(cmd, args, {
           env,

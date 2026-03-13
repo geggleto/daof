@@ -36,6 +36,8 @@ You MUST put the complete YAML in this response. Do NOT write to a file or respo
 - Raw YAML only (no markdown), or
 - A single fenced code block: \`\`\`yaml ... \`\`\` containing the full document.
 
+YAML style: Use block style (indented key-value) for all mappings. Do NOT use inline/compact style like \`{ key: value }\` for any object that has nested keys—YAML does not allow nested mappings inside compact form and will fail to parse.
+
 Required shape (three top-level keys):
 capabilities:
   <id>:

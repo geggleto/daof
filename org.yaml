@@ -1,94 +1,10 @@
 version: "1.0"
-middleware:
-  agent:
-    - agent_metrics
-  capability: []
 org:
-  name: YGGMarketing
-  description: Autonomous marketing team for YGG games. Generates content, posts
-    to X, tracks engagement.
+  name: DAOF Demo
+  description: Autonomous AI organization for demonstrating the DAOF framework.
   goals:
-    - maximize_organic_engagement
-    - stay_under_monthly_budget: 1500
-    - maintain_brand_compliance
+    - generate_agents_capabilities_and_workflows
 agents:
-  ceo:
-    provider: cursor
-    model: auto
-    role: Chief Executive Officer
-    description: Oversees budget, approves major strategies, monitors KPIs
-    capabilities:
-      - name: logger
-      - name: check_budget
-      - name: alert_board
-      - name: gitactor_scanner
-    fallback: ceo_backup
-    max_concurrent_tasks: 3
-  cmo:
-    provider: cursor
-    model: auto
-    role: Chief Marketing Officer
-    description: Defines per-game content strategy and asset volume
-    capabilities:
-      - name: generate_strategy
-      - name: image_gen
-      - name: gitactor_scanner
-    max_concurrent_tasks: 5
-  content_writer:
-    provider: cursor
-    model: auto
-    role: Content Writer
-    description: Generates captions, threads, blog posts
-    capabilities:
-      - name: gitactor_scanner
-      - name: text_formatter
-      - name: write_post
-  content_designer:
-    provider: cursor
-    model: auto
-    role: Content Designer
-    description: Creates images & short videos
-    capabilities:
-      - name: image_gen
-      - name: video_gen_short
-      - name: gitactor_scanner
-      - name: generate_assets
-  visual_qa:
-    provider: cursor
-    model: auto
-    role: Visual Quality Assurance
-    description: Reviews visuals for branding, errors, relevance
-    capabilities:
-      - name: gitactor_scanner
-      - name: review_assets
-  compliance_qa:
-    provider: cursor
-    model: auto
-    role: Compliance & Legal QA
-    description: Checks for IP, spoilers, brand safety, legal risk
-    capabilities:
-      - name: gitactor_scanner
-      - name: final_compliance_check
-  content_manager:
-    provider: cursor
-    model: auto
-    role: Content Manager
-    description: Assembles final posts and publishes
-    capabilities:
-      - name: post_to_x
-      - name: schedule_post
-      - name: gitactor_scanner
-      - name: assemble_and_post
-  data_analyst:
-    provider: cursor
-    model: auto
-    role: Data Analyst
-    description: Collects X metrics hourly, generates insights
-    capabilities:
-      - name: get_x_metrics
-      - name: upsert_metric
-      - name: generate_report
-      - name: collect_metrics
   planner:
     provider: cursor
     model: auto
@@ -129,20 +45,19 @@ agents:
     capabilities:
       - name: frontend_code_writer
       - name: logger
-  coo:
+  application_engineer:
     provider: cursor
     model: auto
-    role: Chief Operating Officer
-    description: Evaluates performance of all agents except the CEO. Identifies
-      degraded or critical agents and upgrades their capabilities via config
-      patches or the build flow.
+    role: Principal Application Engineer
+    description: Writes production-grade, architecturally sound framework code on
+      demand. Focus on new tools and capabilities for DAOF (TypeScript/Node).
+      Enforces principal-level standards including strict typing, DAOF
+      capability contracts (inputs/outputs), error handling, and test
+      scaffolding. Can be assigned to any workflow step that requires backend or
+      framework implementation.
     capabilities:
-      - name: fetch_agent_performance
-      - name: score_agent_performance
-      - name: recommend_upgrades
-      - name: apply_capability_upgrade
+      - name: application_code_writer
       - name: logger
-    max_concurrent_tasks: 2
 capabilities:
   logger:
     type: tool
@@ -160,10 +75,13 @@ capabilities:
     description: Get/set/delete by key (bundled; Redis or in-memory)
   image_generator:
     type: tool
-    description: Generate images via HTTP endpoint (bundled)
+    description: Generate images via HTTP/Hugging Face endpoint (bundled)
     config:
       endpoint: https://your-flux-endpoint.hf.space
       api_key: env(HF_API_KEY)
+      default_batch_size: 5
+      max_batch_size: 20
+    persistence: sql_events
   text_generator:
     type: tool
     description: Generate text via LLM endpoint (bundled)
@@ -186,7 +104,7 @@ capabilities:
       access_token_secret: env(TWITTER_ACCESS_TOKEN_SECRET)
   metrics_fetcher:
     type: tool
-    description: Fetch X/GA4 metrics (bundled)
+    description: Fetch X/GA4 metrics (bundled; get X metrics)
     config:
       endpoint: https://api.twitter.com/2/tweets
       api_key: env(X_API_KEY)
@@ -195,15 +113,6 @@ capabilities:
     description: Upload file to local or S3 (bundled; S3 stub)
     config:
       base_path: ./uploads
-  image_gen:
-    type: tool
-    description: Generate images using Hugging Face endpoint
-    config:
-      endpoint: https://your-flux-endpoint.hf.space
-      api_key: env(HF_API_KEY)
-      default_batch_size: 5
-      max_batch_size: 20
-    persistence: sql_events
   gitactor_scanner:
     type: tool
     description: Security & quality scan using gitactor.dev
@@ -213,15 +122,6 @@ capabilities:
       default_mode: full
       auto_reject_threshold: 60
     persistence: sql_events
-  post_to_x:
-    type: tool
-    description: Publish content to X
-    config:
-      api_key: env(X_API_KEY)
-      api_secret: env(X_API_SECRET)
-      access_token: env(X_ACCESS_TOKEN)
-      access_secret: env(X_ACCESS_SECRET)
-    rate_limit: 3 per minute
   check_budget:
     type: tool
     description: Check budget status
@@ -237,9 +137,6 @@ capabilities:
   video_gen_short:
     type: tool
     description: Generate short video
-  get_x_metrics:
-    type: tool
-    description: Get X metrics
   upsert_metric:
     type: tool
     description: Upsert metric
@@ -267,7 +164,7 @@ capabilities:
     type: tool
     description: Assemble and post
     depends_on:
-      - post_to_x
+      - x_poster
   collect_metrics:
     type: tool
     description: Collect metrics
@@ -462,6 +359,75 @@ capabilities:
     depends_on:
       - recommend_upgrades
       - event_emitter
+  application_code_writer:
+    type: skill
+    description: Accepts a task description (e.g. "add a tool that does X" or "add a
+      capability that does Y"), optional tech stack, constraints, and existing
+      code context. Produces principal-level TypeScript implementation for DAOF
+      tools/capabilities. Delivers capability implementation (e.g. under
+      src/capabilities/ or generated), correct use of framework types
+      (CapabilityInput/CapabilityOutput), error handling, and test scaffolding.
+    config:
+      endpoint: env(LLM_ENDPOINT)
+      api_key: env(LLM_API_KEY)
+    prompt: >-
+      You are a principal-level application engineer for the DAOF framework.
+      Generate production-grade TypeScript for tools and capabilities. Your
+      output must meet every standard below.
+
+
+      == TASK ==
+
+      {{ task }}
+
+
+      == TECH STACK ==
+
+      {{ stack }}
+
+      If no stack is specified, use TypeScript/Node and DAOF conventions.
+
+
+      == EXISTING CONTEXT ==
+
+      {{ context }}
+
+
+      == CONSTRAINTS ==
+
+      {{ constraints }}
+
+
+      == STANDARDS (mandatory) ==
+
+      1. Framework contract: Implement capabilities with execute(input,
+      runContext?) returning Promise<CapabilityOutput>. Use CapabilityInput and
+      CapabilityOutput (Record<string, JsonValue>). No new types that bypass the
+      framework contract.
+
+      2. TypeScript: Strict mode. No any. Explicit parameter and return types.
+      Use Zod or existing schema where config or inputs are validated.
+
+      3. Placement: New capabilities under src/capabilities/ (bundled or
+      generated). Follow existing patterns (e.g. bundled tools/skills, config,
+      depends_on).
+
+      4. Error handling: Surface errors clearly; do not swallow. Use try/catch
+      where appropriate and return structured output (e.g. success, error,
+      message).
+
+      5. Test scaffolding: Co-located test outline (describe/it with intent) or
+      a test file stub for the capability. Export testable units where possible.
+
+      6. Code organization: Single responsibility. Clear exports. Barrel files
+      where appropriate. Document config keys and env vars in comments if used.
+
+
+      == OUTPUT FORMAT ==
+
+      Return the complete implementation code. Use a header comment per file: //
+      --- file: <relative-path> --- Add brief inline comments for non-obvious
+      architectural choices.
 workflows:
   daily_content_cycle:
     trigger: cron(0 9 * * *)
@@ -573,6 +539,22 @@ workflows:
         params:
           message: On-demand performance audit complete
           summary: "{{ apply_capability_upgrade.summary }}"
+  on_demand_application_build:
+    trigger: event(application.build.requested)
+    description: On-demand implementation of a framework task (new tool or
+      capability). Payload task, optional constraints, optional context.
+    steps:
+      - agent: application_engineer
+        action: application_code_writer
+        params:
+          task: "{{ __initial.task }}"
+          constraints: "{{ __initial.constraints }}"
+          context: "{{ __initial.context }}"
+      - agent: application_engineer
+        action: logger
+        params:
+          message: Application build step complete
+          summary: "{{ application_code_writer.summary }}"
 backbone:
   type: redis
   config:
@@ -584,6 +566,10 @@ backbone:
         type: fifo
       - name: build.replies
         type: fifo
+middleware:
+  agent:
+    - agent_metrics
+  capability: []
 fault_tolerance:
   health_checks_interval: 5m
   rogue_detection:
