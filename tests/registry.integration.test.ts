@@ -89,16 +89,47 @@ describe("Registry store (MongoDB)", () => {
     expect(stale.agent_ids).toContain(agentId);
   }, 10000);
 
-  it("archiveStale sets archived_at and listAll excludes archived entries", async () => {
+  it("archiveStale sets archived_at, returns archived ids, and listAll excludes archived entries", async () => {
     if (!mongoAvailable) return;
     const capId = id("itest_archive_cap");
+    const agentId = id("itest_archive_agent");
     const tag = `itest_archive_${Date.now()}`;
     await store.upsertCapability(capId, { type: "tool", description: "To archive" }, { tags: [tag] });
+    await store.upsertAgent(agentId, { provider: "cursor", model: "auto", role: "R", capabilities: [] }, { tags: [tag] });
     let all = await store.listAll();
     expect(all.capability_ids).toContain(capId);
-    await store.archiveStale({ olderThanDays: 0 });
+    expect(all.agent_ids).toContain(agentId);
+    const result = await store.archiveStale({ olderThanDays: 0 });
+    expect(result.archived_capability_ids).toContain(capId);
+    expect(result.archived_agent_ids).toContain(agentId);
     all = await store.listAll();
     expect(all.capability_ids).not.toContain(capId);
+    expect(all.agent_ids).not.toContain(agentId);
+  }, 10000);
+
+  it("getCapability and getAgent return null for archived entries", async () => {
+    if (!mongoAvailable) return;
+    const capId = id("itest_get_archived_cap");
+    const agentId = id("itest_get_archived_agent");
+    await store.upsertCapability(capId, { type: "tool", description: "X" }, { tags: ["itest"] });
+    await store.upsertAgent(agentId, { provider: "cursor", model: "auto", role: "R", capabilities: [] }, { tags: ["itest"] });
+    expect(await store.getCapability(capId)).not.toBeNull();
+    expect(await store.getAgent(agentId)).not.toBeNull();
+    await store.archiveStale({ olderThanDays: 0 });
+    expect(await store.getCapability(capId)).toBeNull();
+    expect(await store.getAgent(agentId)).toBeNull();
+  }, 10000);
+
+  it("archived entries are excluded from queryByCategory", async () => {
+    if (!mongoAvailable) return;
+    const cat = `itest_archived_cat_${Date.now()}`;
+    const capId = id("itest_archived_cat_cap");
+    await store.upsertCapability(capId, { type: "tool", description: "X" }, { category: cat });
+    let result = await store.queryByCategory(cat);
+    expect(result.capability_ids).toContain(capId);
+    await store.archiveStale({ olderThanDays: 0 });
+    result = await store.queryByCategory(cat);
+    expect(result.capability_ids).not.toContain(capId);
   }, 10000);
 
   it("archived entries are excluded from queryByTags", async () => {

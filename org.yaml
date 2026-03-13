@@ -353,46 +353,6 @@ capabilities:
       --- file: <relative-path> --- Add brief inline comments for non-obvious
       architectural choices.
 workflows:
-  daily_content_cycle:
-    trigger: cron(0 9 * * *)
-    description: Full daily content generation & posting
-    persistence: sql_events
-    steps:
-      - agent: ceo
-        action: check_budget
-        on_failure: alert_and_halt
-      - agent: cmo
-        action: generate_strategy
-      - parallel:
-          - agent: content_writer
-            action: write_post
-          - agent: content_designer
-            action: generate_assets
-            params:
-              batch_size: "{{ cmo.recommended_variants }}"
-      - agent: visual_qa
-        action: review_assets
-      - agent: compliance_qa
-        action: final_compliance_check
-      - agent: content_manager
-        action: assemble_and_post
-        condition: "{{ visual_qa.verdict == 'approve' && compliance_qa.verdict ==
-          'approve' }}"
-  hourly_metrics:
-    trigger: cron(0 * * * *)
-    description: Pull X metrics and store
-    steps:
-      - agent: data_analyst
-        action: collect_metrics
-  registry_curation:
-    trigger: cron(0 3 * * 0)
-    description: Weekly prune of stale registry entries; Curator archives capabilities/agents
-      not accessed within older_than_days (default 90).
-    steps:
-      - agent: curator
-        action: prune_registry
-        params:
-          older_than_days: 90
   build_on_request:
     trigger: event(build.requested)
     description: "Self-upgrade; run Planner, Generator, merge, Verifier, reply.
@@ -425,53 +385,6 @@ workflows:
           success: "{{ verifier.pass }}"
           prd: "{{ planner.prd }}"
           added_count: "{{ builder.added_count }}"
-  weekly_performance_review:
-    trigger: cron(0 8 * * 1)
-    description: Weekly evaluation of all non-CEO agents; score, recommend, and
-      apply upgrades for underperformers.
-    persistence: sql_events
-    steps:
-      - agent: coo
-        action: fetch_agent_performance
-        params:
-          exclude:
-            - ceo
-      - agent: coo
-        action: score_agent_performance
-      - agent: coo
-        action: recommend_upgrades
-        condition: "{{ score_agent_performance.has_degraded_or_critical == true }}"
-      - agent: coo
-        action: apply_capability_upgrade
-        condition: "{{ recommend_upgrades.has_recommendations == true }}"
-      - agent: coo
-        action: logger
-        params:
-          message: Weekly performance review complete
-          summary: "{{ apply_capability_upgrade.summary }}"
-  on_demand_performance_audit:
-    trigger: event(performance.audit.requested)
-    description: On-demand audit triggered by the CEO or external event. Same
-      evaluation pipeline but for a specific agent or all.
-    steps:
-      - agent: coo
-        action: fetch_agent_performance
-        params:
-          agents: "{{ __initial.agents }}"
-          exclude:
-            - ceo
-      - agent: coo
-        action: score_agent_performance
-      - agent: coo
-        action: recommend_upgrades
-      - agent: coo
-        action: apply_capability_upgrade
-        condition: "{{ recommend_upgrades.has_recommendations == true }}"
-      - agent: coo
-        action: logger
-        params:
-          message: On-demand performance audit complete
-          summary: "{{ apply_capability_upgrade.summary }}"
   on_demand_application_build:
     trigger: event(application.build.requested)
     description: On-demand implementation of a framework task (new tool or
@@ -499,15 +412,14 @@ backbone:
         type: fifo
       - name: build.replies
         type: fifo
+registry:
+  mongo_uri: mongodb://localhost:27017
 middleware:
   agent:
     - agent_metrics
   capability: []
 fault_tolerance:
   health_checks_interval: 5m
-  rogue_detection:
-    - hallucination_guard
-    - output_length_limit: 4000 chars
   retries:
     default: 3
     backoff: exponential

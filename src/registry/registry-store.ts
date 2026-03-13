@@ -2,7 +2,7 @@
  * MongoDB-backed registry for skills/capabilities (and optionally agents) with metadata search.
  * Config: REGISTRY_MONGO_URI or MONGO_URI; default mongodb://localhost:27017, database daof_registry.
  */
-import { MongoClient, type Db, type Collection } from "mongodb";
+import { MongoClient, type Db, type Collection, type Filter } from "mongodb";
 import type { JsonValue } from "../types/json.js";
 import type {
   RegistryMetadata,
@@ -14,8 +14,10 @@ const DEFAULT_DB = "daof_registry";
 const CAPABILITIES_COLLECTION = "capabilities";
 const AGENTS_COLLECTION = "agents";
 
-/** Filter for active (non-archived) entries. */
-const ACTIVE_FILTER = { $or: [{ archived_at: { $exists: false } }, { archived_at: null }] } as const;
+/** Filter for active (non-archived) entries. Typed per collection so driver Filter<T> accepts it. */
+const activeFilterBase = { $or: [{ archived_at: { $exists: false } }, { archived_at: null }] };
+const ACTIVE_FILTER_CAP: Filter<RegistryCapabilityEntry> = activeFilterBase as Filter<RegistryCapabilityEntry>;
+const ACTIVE_FILTER_AGENT: Filter<RegistryAgentEntry> = activeFilterBase as Filter<RegistryAgentEntry>;
 
 export interface ListStaleOptions {
   olderThanDays: number;
@@ -95,7 +97,7 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
   await agentsColl.createIndex({ last_accessed: 1 });
   await agentsColl.createIndex({ archived_at: 1 });
 
-  return {
+  const store: RegistryStore = {
     async upsertCapability(id, definition, metadata, options) {
       const doc = toDoc(id, "capability", definition, metadata, options) as Omit<RegistryCapabilityEntry, "_id">;
       await capabilitiesColl.updateOne(
@@ -115,23 +117,25 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
     },
 
     async queryByTags(tags, options) {
-      const baseFilter = ACTIVE_FILTER;
       if (!tags.length) {
         const [capIds, agIds] = await Promise.all([
-          capabilitiesColl.find(baseFilter).project({ _id: 1 }).toArray(),
-          agentsColl.find(baseFilter).project({ _id: 1 }).toArray(),
+          capabilitiesColl.find(ACTIVE_FILTER_CAP).project({ _id: 1 }).toArray(),
+          agentsColl.find(ACTIVE_FILTER_AGENT).project({ _id: 1 }).toArray(),
         ]);
         return {
           capability_ids: capIds.map((d) => String((d as { _id: string })._id)),
           agent_ids: agIds.map((d) => String((d as { _id: string })._id)),
         };
       }
-      const tagFilter = options?.matchAll
-        ? { ...baseFilter, tags: { $all: tags } }
-        : { ...baseFilter, tags: { $in: tags } };
+      const capTagFilter: Filter<RegistryCapabilityEntry> = options?.matchAll
+        ? { ...ACTIVE_FILTER_CAP, tags: { $all: tags } }
+        : { ...ACTIVE_FILTER_CAP, tags: { $in: tags } };
+      const agTagFilter: Filter<RegistryAgentEntry> = options?.matchAll
+        ? { ...ACTIVE_FILTER_AGENT, tags: { $all: tags } }
+        : { ...ACTIVE_FILTER_AGENT, tags: { $in: tags } };
       const [capIds, agIds] = await Promise.all([
-        capabilitiesColl.find(tagFilter).project({ _id: 1 }).toArray(),
-        agentsColl.find(tagFilter).project({ _id: 1 }).toArray(),
+        capabilitiesColl.find(capTagFilter).project({ _id: 1 }).toArray(),
+        agentsColl.find(agTagFilter).project({ _id: 1 }).toArray(),
       ]);
       return {
         capability_ids: capIds.map((d) => String((d as { _id: string })._id)),
@@ -140,10 +144,9 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
     },
 
     async queryByCategory(category) {
-      const baseFilter = ACTIVE_FILTER;
       const [capIds, agIds] = await Promise.all([
-        capabilitiesColl.find({ ...baseFilter, category }).project({ _id: 1 }).toArray(),
-        agentsColl.find({ ...baseFilter, role_category: category }).project({ _id: 1 }).toArray(),
+        capabilitiesColl.find({ ...ACTIVE_FILTER_CAP, category }).project({ _id: 1 }).toArray(),
+        agentsColl.find({ ...ACTIVE_FILTER_AGENT, role_category: category }).project({ _id: 1 }).toArray(),
       ]);
       return {
         capability_ids: capIds.map((d) => String((d as { _id: string })._id)),
@@ -152,7 +155,7 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
     },
 
     async getCapability(id) {
-      const filter = { _id: id, ...ACTIVE_FILTER };
+      const filter: Filter<RegistryCapabilityEntry> = { _id: id, ...ACTIVE_FILTER_CAP };
       const doc = await capabilitiesColl.findOne(filter);
       if (!doc) return null;
       const now = new Date().toISOString();
@@ -161,7 +164,7 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
     },
 
     async getAgent(id) {
-      const filter = { _id: id, ...ACTIVE_FILTER };
+      const filter: Filter<RegistryAgentEntry> = { _id: id, ...ACTIVE_FILTER_AGENT };
       const doc = await agentsColl.findOne(filter);
       if (!doc) return null;
       const now = new Date().toISOString();
@@ -171,8 +174,8 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
 
     async listAll() {
       const [capIds, agIds] = await Promise.all([
-        capabilitiesColl.find(ACTIVE_FILTER).project({ _id: 1 }).toArray(),
-        agentsColl.find(ACTIVE_FILTER).project({ _id: 1 }).toArray(),
+        capabilitiesColl.find(ACTIVE_FILTER_CAP).project({ _id: 1 }).toArray(),
+        agentsColl.find(ACTIVE_FILTER_AGENT).project({ _id: 1 }).toArray(),
       ]);
       return {
         capability_ids: capIds.map((d) => String((d as { _id: string })._id)),
@@ -191,8 +194,8 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
           { last_accessed: { $exists: false }, updated_at: { $lt: cutoffIso } },
         ],
       };
-      const capFilter = includeArchived ? staleFilter : { $and: [ACTIVE_FILTER, staleFilter] };
-      const agFilter = includeArchived ? staleFilter : { $and: [ACTIVE_FILTER, staleFilter] };
+      const capFilter: Filter<RegistryCapabilityEntry> = includeArchived ? (staleFilter as Filter<RegistryCapabilityEntry>) : { $and: [ACTIVE_FILTER_CAP, staleFilter] };
+      const agFilter: Filter<RegistryAgentEntry> = includeArchived ? (staleFilter as Filter<RegistryAgentEntry>) : { $and: [ACTIVE_FILTER_AGENT, staleFilter] };
       const [capIds, agIds] = await Promise.all([
         capabilitiesColl.find(capFilter).project({ _id: 1 }).toArray(),
         agentsColl.find(agFilter).project({ _id: 1 }).toArray(),
@@ -205,7 +208,7 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
 
     async archiveStale(options) {
       const { olderThanDays } = options;
-      const stale = await this.listStale({ olderThanDays, includeArchived: false });
+      const stale = await store.listStale({ olderThanDays, includeArchived: false });
       const now = new Date().toISOString();
       if (stale.capability_ids.length > 0) {
         await capabilitiesColl.updateMany(
@@ -225,6 +228,8 @@ export async function createRegistryStore(mongoUri: string): Promise<RegistrySto
       };
     },
   };
+
+  return store;
 }
 
 /**
