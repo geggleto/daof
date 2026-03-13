@@ -16,7 +16,8 @@ import type { RunRegistry } from "../backbone/run-registry.js";
 export function buildWorkflowGraph(
   runtime: OrgRuntime,
   workflow: WorkflowConfig,
-  runRegistry?: RunRegistry | null
+  runRegistry?: RunRegistry | null,
+  workflowId?: string
 ): StateGraph<typeof WorkflowStateAnnotation, WorkflowState, WorkflowStateUpdate, string> {
   const steps = workflow.steps;
   const graph = new StateGraph(WorkflowStateAnnotation) as StateGraph<
@@ -39,7 +40,9 @@ export function buildWorkflowGraph(
         throw new WorkflowCancelledError(runId);
       }
       const context: WorkflowContext = (state.context ?? {}) as WorkflowContext;
-      const nextContext = await executeStep(runtime, step, context);
+      const runInfo =
+        workflowId && runId ? { workflowId, runId } : undefined;
+      const nextContext = await executeStep(runtime, step, context, runInfo);
       return { context: nextContext };
     };
 

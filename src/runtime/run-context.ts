@@ -1,5 +1,7 @@
 import type { BackboneAdapter } from "../backbone/types.js";
 import type { RegistryStore } from "../registry/registry-store.js";
+import type { TicketStore } from "../tickets/index.js";
+import type { TicketUpdate } from "../tickets/types.js";
 import type { CapabilityInput, CapabilityOutput } from "../types/json.js";
 import type { OrgConfig } from "../schema/index.js";
 import type { CapabilityInstance } from "../types/json.js";
@@ -44,6 +46,11 @@ export interface RunContext {
   updateOrgConfig?: (config: OrgConfig) => void;
   /** When present (daemon mode), capabilities use this as the current config for merge/patch so the base is in-memory state. */
   getCurrentOrgConfig?: () => OrgConfig;
+  /** When present (workflow run), capabilities can append updates to the run ticket for observability. */
+  ticket?: {
+    id: string;
+    append(update: Omit<TicketUpdate, "at">): Promise<void>;
+  };
 }
 
 /**
@@ -56,19 +63,27 @@ export interface RunContextFactoryDeps {
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
   registry?: RegistryStore;
+  ticketStore?: TicketStore;
   capabilityMiddleware?: import("./middleware.js").CapabilityMiddleware[];
   /** When set (daemon mode), createRunContext will set updateOrgConfig and getCurrentOrgConfig on the returned context. */
   orgFilePath?: string;
 }
 
+export interface RunInfo {
+  workflowId: string;
+  runId: string;
+}
+
 /**
  * Build a RunContext for the given capability. InvokeCapability is scoped to that
  * capability's depends_on; nested invocations get their own RunContext and inherit agentLlm when provided.
+ * When runInfo and ticketStore are present, context.ticket allows appending updates to the run ticket.
  */
 export function createRunContext(
   deps: RunContextFactoryDeps,
   currentCapabilityId: string,
-  agentLlm?: AgentLlm
+  agentLlm?: AgentLlm,
+  runInfo?: RunInfo
 ): RunContext {
   const def = deps.config.capabilities[currentCapabilityId];
   const allowed = def?.depends_on ?? [];
@@ -86,7 +101,7 @@ export function createRunContext(
     if (!target) {
       throw new Error(`Capability not found: ${capabilityId}`);
     }
-    const nestedRunContext = createRunContext(deps, capabilityId, agentLlm);
+    const nestedRunContext = createRunContext(deps, capabilityId, agentLlm, runInfo);
     const hasCapabilityMiddleware = deps.capabilityMiddleware && deps.capabilityMiddleware.length > 0;
     if (hasCapabilityMiddleware && deps.capabilityMiddleware) {
       return executeCapabilityWithMiddleware(
@@ -114,6 +129,15 @@ export function createRunContext(
     daemonContext.getCurrentOrgConfig = () => deps.config;
   }
 
+  const ticketContext: Partial<RunContext> = {};
+  if (deps.ticketStore && runInfo) {
+    ticketContext.ticket = {
+      id: runInfo.runId,
+      append: (update: Omit<TicketUpdate, "at">) =>
+        deps.ticketStore!.appendUpdate(runInfo!.runId, update),
+    };
+  }
+
   return {
     ...(deps.backbone && { backbone: deps.backbone }),
     invokeCapability,
@@ -122,5 +146,6 @@ export function createRunContext(
     ...(agentLlm && { agentLlm }),
     ...(deps.registry && { registry: deps.registry }),
     ...daemonContext,
+    ...ticketContext,
   };
 }

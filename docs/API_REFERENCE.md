@@ -125,8 +125,10 @@ interface OrgRuntime {
   checkpointStore?: CheckpointStore;
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
-  /** Skills/capabilities registry (MongoDB). Set when registry config present and connection succeeds. */
+  /** Skills/capabilities registry (MongoDB). Required for running workflows. */
   registry?: RegistryStore;
+  /** Ticket store (MongoDB) for run observability. Required for running workflows. */
+  ticketStore?: TicketStore;
   agentMiddleware?: AgentMiddleware[];
   capabilityMiddleware?: CapabilityMiddleware[];
 }
@@ -140,7 +142,7 @@ function bootstrap(config: OrgConfig): OrgRuntime;
 function connectBackbone(runtime: OrgRuntime): Promise<void>;
 ```
 
-- `bootstrap` — resolve env refs, load capabilities, resolve config.middleware via registry (agent/capability pipeline), bootstrap agents; does not connect backbone
+- `bootstrap` — resolve env refs, load capabilities, resolve config.middleware via registry (agent/capability pipeline), bootstrap agents; connects to MongoDB for registry and ticket store (required; throws on connection failure); does not connect backbone
 - `connectBackbone` — create adapter from config, connect, set `runtime.backbone`; when adapter exposes `createCheckpointStore`/`createCapabilityStore`, attaches those to runtime and sets `runtime.metricsStore` (scoped store for agent metrics)
 
 ### src/runtime/middleware.ts
@@ -240,6 +242,13 @@ interface RunContext {
   updateOrgConfig?: (config: OrgConfig) => void;
   /** When present (daemon mode), capabilities use this as the current config for merge/patch so the base is in-memory state. */
   getCurrentOrgConfig?: () => OrgConfig;
+  /** When present (workflow run), capabilities can append updates to the run ticket (observability). */
+  ticket?: { id: string; append(update: Omit<TicketUpdate, "at">): Promise<void> };
+}
+
+interface RunInfo {
+  workflowId: string;
+  runId: string;
 }
 
 interface RunContextFactoryDeps {
@@ -249,6 +258,7 @@ interface RunContextFactoryDeps {
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
   registry?: RegistryStore;
+  ticketStore?: TicketStore;
   capabilityMiddleware?: CapabilityMiddleware[];
   /** When set (daemon mode), createRunContext sets updateOrgConfig and getCurrentOrgConfig on the returned context. */
   orgFilePath?: string;
@@ -261,13 +271,69 @@ interface RunContextFactoryDeps {
 function createRunContext(
   deps: RunContextFactoryDeps,
   currentCapabilityId: string,
-  agentLlm?: AgentLlm
+  agentLlm?: AgentLlm,
+  runInfo?: RunInfo
 ): RunContext;
 ```
 
 ---
 
-## 4. Workflow
+## 4. Tickets (observability)
+
+### src/tickets/types.ts
+
+**Types**
+
+```ts
+type TicketStatus = "running" | "completed" | "failed";
+
+interface TicketUpdate {
+  at: string;
+  agent_id?: string;
+  capability_id?: string;
+  step?: string;
+  message?: string;
+  payload?: Record<string, JsonValue>;
+}
+
+interface Ticket {
+  _id: string;
+  workflow_id: string;
+  run_id: string;
+  status: TicketStatus;
+  created_at: string;
+  updated_at: string;
+  updates: TicketUpdate[];
+  initial_input?: Record<string, JsonValue>;
+}
+
+interface TicketMeta {
+  workflow_id: string;
+  run_id: string;
+  initial_input?: Record<string, JsonValue>;
+}
+
+interface TicketStore {
+  create(ticketId: string, meta: TicketMeta): Promise<void>;
+  appendUpdate(ticketId: string, update: Omit<TicketUpdate, "at">): Promise<void>;
+  setStatus(ticketId: string, status: TicketStatus): Promise<void>;
+  get(ticketId: string): Promise<Ticket | null>;
+}
+```
+
+### src/tickets/ticket-store.ts
+
+**Functions**
+
+```ts
+function createTicketStore(mongoUri: string): Promise<TicketStore>;
+```
+
+- Uses DB `daof_tickets`, collection `tickets`. Same Mongo URI as registry (REGISTRY_MONGO_URI / MONGO_URI).
+
+---
+
+## 5. Workflow
 
 ### src/workflow/types.ts
 
@@ -280,6 +346,8 @@ interface WorkflowRunResult {
   success: boolean;
   context: WorkflowContext;
   error?: Error;
+  /** Run/ticket ID for observability (daof ticket <runId>). */
+  runId?: string;
 }
 
 interface CronTrigger {
@@ -467,7 +535,7 @@ function isCronDue(expression: string, date?: Date): boolean;
 
 ---
 
-## 5. Backbone
+## 6. Backbone
 
 ### src/backbone/types.ts
 
@@ -627,7 +695,7 @@ function createRedisCapabilityStore(redisUrl: string): CapabilityStore;
 
 ---
 
-## 6. Capabilities
+## 7. Capabilities
 
 ### src/capabilities/load.ts
 
@@ -728,7 +796,7 @@ function getBundledCapability(
 
 ---
 
-## 7. Providers
+## 8. Providers
 
 Provider execution is behind a service layer: capabilities use `LLMProviderService` and `getProviderService`; each provider (e.g. Cursor) implements the interface. See [docs/providers.md](providers.md).
 
@@ -803,7 +871,7 @@ function registerProviderServiceFactory(
 
 ---
 
-## 8. Agents
+## 9. Agents
 
 ### src/agents/agent.ts
 
@@ -854,7 +922,7 @@ function bootstrapAgents(
 
 ---
 
-## 9. Fault
+## 10. Fault
 
 ### src/fault/circuit-breaker.ts
 
@@ -879,7 +947,7 @@ function createAppCircuitBreaker(options?: {
 
 ---
 
-## 10. CLI
+## 11. CLI
 
 ### src/cli/pidfile.ts
 
@@ -903,7 +971,7 @@ function checkAlreadyRunning(pidFilePath: string): void;
 
 ---
 
-## 11. Package entry (src/index.ts)
+## 12. Package entry (src/index.ts)
 
 **Exports**
 

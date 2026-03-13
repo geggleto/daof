@@ -21,12 +21,15 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 | `src/schema/` | Zod schemas and config types (OrgConfig, etc.). |
 | `src/fault/` | App-level circuit breaker. |
 | `src/parser/`, `src/config/`, `src/types/` | YAML loading, env resolution, JsonValue/CapabilityInput/Output. |
+| `src/tickets/` | MongoDB-backed ticket store for workflow run observability (one ticket per run; agents/capabilities append via RunContext.ticket). |
 | `src/build/` | Build flow: Planner (PRD), review, Generator, merge into org, Verifier. Uses org-level planner/generator/builder/verifier agents when present; supports `--via-events` (build.requested / build.replies). |
 | `docs/` | Human and agent documentation. |
 
+**MongoDB is required** for running workflows: bootstrap connects to Mongo for the registry (skills/capabilities) and the ticket store. Configure `registry.mongo_uri` in the manifest or set `REGISTRY_MONGO_URI` / `MONGO_URI` (default `mongodb://localhost:27017`).
+
 ## Key entry points
 
-- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`, `daof plan [description] [--file <path>] [--provider <id>] [--no-edit] [--execute]` (interactive Planner-only: develop a PRD, optionally revise/save/execute), `daof build "<description>" [--file <path>] [--yolo] [--provider <id>] [--via-events]` (generate capabilities/workflows/agents and merge into org; use --via-events to trigger build via backbone events when org is running).
+- **CLI:** [src/cli/index.ts](src/cli/index.ts) — `daof validate <file>`, `daof run <file> [--workflow <name>] [-d] [--pid-file <path>]`, `daof kill <run_id> <file>`, `daof ticket <id>` (show workflow run ticket history), `daof plan [description] [--file <path>] [--provider <id>] [--no-edit] [--execute]` (interactive Planner-only: develop a PRD, optionally revise/save/execute), `daof build "<description>" [--file <path>] [--yolo] [--provider <id>] [--via-events]` (generate capabilities/workflows/agents and merge into org; use --via-events to trigger build via backbone events when org is running).
 - **Programmatic:** [src/index.ts](src/index.ts) — `loadYaml`, `validate`, `bootstrap`, `connectBackbone`, `runWorkflow`, `createBackbone`, `createAppCircuitBreaker`; types: `OrgConfig`, `OrgRuntime`, `RunContext`, `BackboneAdapter`, `RunWorkflowOptions`, `CapabilityInput`, `CapabilityOutput`, `JsonValue`, `ParsedYaml`, `CapabilityInstance`. Flow: load YAML → validate → bootstrap → (optional) connectBackbone → runWorkflow or start scheduler. See [docs/workflow-engine.md](docs/workflow-engine.md) for workflow API and scheduler.
 
 ## Full technical reference
@@ -44,4 +47,5 @@ For the **full class and type map**, and **all exported function/interface signa
 - [docs/authentication.md](docs/authentication.md) — Auth strategies for external capabilities.
 - [docs/verification.md](docs/verification.md) — Requirements traceability and verification.
 - [docs/registry.md](docs/registry.md) — Skills/capabilities registry (MongoDB), staleness, archiving, prune_registry, Curator agent.
+- [docs/tickets.md](docs/tickets.md) — Ticketing: one ticket per workflow run, RunContext.ticket, `daof ticket <id>`, Mongo required.
 - [docs/prd.md](docs/prd.md), [docs/tip.md](docs/tip.md), [docs/backlog.md](docs/backlog.md) — Product and backlog context.

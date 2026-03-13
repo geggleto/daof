@@ -21,6 +21,17 @@ vi.mock("../src/registry/registry-store.js", () => {
   };
 });
 
+vi.mock("../src/tickets/index.js", () => ({
+  createTicketStore: vi.fn(() =>
+    Promise.resolve({
+      create: vi.fn().mockResolvedValue(undefined),
+      appendUpdate: vi.fn().mockResolvedValue(undefined),
+      setStatus: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue(null),
+    })
+  ),
+}));
+
 const minimalValidOrg: ParsedYaml = {
   version: "1.0",
   org: { name: "Test", goals: [] },

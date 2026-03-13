@@ -43,12 +43,14 @@ interface WorkflowRunResult {
   success: boolean;
   context: WorkflowContext;
   error?: Error;   // present when success === false
+  runId?: string;  // ticket/run ID for observability (daof ticket <runId>)
 }
 ```
 
 - **success:** `true` if all steps completed without throwing.
 - **context:** final workflow context (all step outputs).
 - **error:** set when a step threw; workflow stops and returns this result.
+- **runId:** when present, the run/ticket ID; the CLI prints it as "Ticket ID" and you can run `daof ticket <runId>` to view the ticket history. See [docs/tickets.md](tickets.md).
 
 ### CapabilityInput / CapabilityOutput
 
@@ -106,7 +108,9 @@ function runWorkflow(
 
 **Circuit breaker (optional):** `runWorkflow(..., options?: { circuitBreaker })`. When provided, the full graph invoke runs through the breaker; after a threshold of failures (e.g. 5) the circuit opens and the run fails. The CLI uses this and exits gracefully (exit 1) when the circuit is open. See [src/fault/circuit-breaker.ts](src/fault/circuit-breaker.ts) and [docs/verification.md](verification.md).
 
-When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, and **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.1 Capabilities calling other capabilities](#61-capabilities-calling-other-capabilities)).
+When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm, runInfo)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.1 Capabilities calling other capabilities](#61-capabilities-calling-other-capabilities)), and when the runtime has a ticket store and runInfo (workflow run), **ticket** `{ id, append(update) }` so capabilities can append observability updates to the run ticket. See [docs/tickets.md](tickets.md).
+
+**MongoDB is required** for running workflows: the runtime creates both the registry store and the ticket store at bootstrap; connection failure throws.
 
 ---
 

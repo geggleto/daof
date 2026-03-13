@@ -9,6 +9,8 @@ export interface WorkflowRunResult {
   success: boolean;
   context: WorkflowContext;
   error?: Error;
+  /** Run/ticket ID for observability (daof ticket <runId>). */
+  runId?: string;
 }
 
 export interface CronTrigger {

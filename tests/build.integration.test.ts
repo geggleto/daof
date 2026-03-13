@@ -37,6 +37,17 @@ vi.mock("node:readline", () => ({
   },
 }));
 
+vi.mock("../src/tickets/index.js", () => ({
+  createTicketStore: vi.fn(() =>
+    Promise.resolve({
+      create: vi.fn().mockResolvedValue(undefined),
+      appendUpdate: vi.fn().mockResolvedValue(undefined),
+      setStatus: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue(null),
+    })
+  ),
+}));
+
 vi.mock("../src/registry/registry-store.js", () => {
   const mockStore = {
     upsertCapability: vi.fn().mockResolvedValue(undefined),

@@ -4,7 +4,7 @@ import type { SequentialStep, ParallelStep } from "../schema/index.js";
 import type { OrgRuntime } from "../runtime/bootstrap.js";
 import type { WorkflowContext, WorkflowRunResult } from "./types.js";
 import type { RunRegistry } from "../backbone/run-registry.js";
-import { createRunContext } from "../runtime/run-context.js";
+import { createRunContext, type RunInfo } from "../runtime/run-context.js";
 import { getProviderApiKey } from "../providers/registry.js";
 import { evaluateCondition, resolveParams } from "./context.js";
 
@@ -22,7 +22,8 @@ function isParallelStep(step: SequentialStep | ParallelStep): step is ParallelSt
 async function executeSequentialStep(
   runtime: OrgRuntime,
   step: SequentialStep,
-  context: WorkflowContext
+  context: WorkflowContext,
+  runInfo?: RunInfo
 ): Promise<WorkflowContext> {
   if (step.condition && !evaluateCondition(context, step.condition)) {
     return context;
@@ -37,7 +38,7 @@ async function executeSequentialStep(
     model: agent.model,
     apiKey: getProviderApiKey(agent.provider),
   };
-  const runContext = createRunContext(runtime, step.action, agentLlm);
+  const runContext = createRunContext(runtime, step.action, agentLlm, runInfo);
   const startTime = Date.now();
   let output: CapabilityOutput;
   try {
@@ -55,21 +56,23 @@ async function executeSequentialStep(
 export async function executeStep(
   runtime: OrgRuntime,
   step: SequentialStep | ParallelStep,
-  context: WorkflowContext
+  context: WorkflowContext,
+  runInfo?: RunInfo
 ): Promise<WorkflowContext> {
   if (isParallelStep(step)) {
-    return executeParallelStep(runtime, step, context);
+    return executeParallelStep(runtime, step, context, runInfo);
   }
-  return executeSequentialStep(runtime, step, context);
+  return executeSequentialStep(runtime, step, context, runInfo);
 }
 
 export async function executeParallelStep(
   runtime: OrgRuntime,
   step: ParallelStep,
-  context: WorkflowContext
+  context: WorkflowContext,
+  runInfo?: RunInfo
 ): Promise<WorkflowContext> {
   const results = await Promise.all(
-    step.parallel.map((s) => executeSequentialStep(runtime, s, context))
+    step.parallel.map((s) => executeSequentialStep(runtime, s, context, runInfo))
   );
   const merged: WorkflowContext = { ...context };
   for (const ctx of results) {

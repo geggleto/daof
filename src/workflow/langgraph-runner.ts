@@ -54,7 +54,15 @@ export async function runWorkflowWithLangGraph(
     await runRegistry.register(id);
   }
 
-  const graphBuilder = buildWorkflowGraph(runtime, workflow, runRegistry);
+  if (runtime.ticketStore) {
+    await runtime.ticketStore.create(id, {
+      workflow_id: workflowId,
+      run_id: id,
+      initial_input: initialInput && typeof initialInput === "object" ? initialInput : undefined,
+    });
+  }
+
+  const graphBuilder = buildWorkflowGraph(runtime, workflow, runRegistry, workflowId);
   const checkpointer = options?.checkpointer ?? new MemorySaver();
   const compiled = graphBuilder.compile({ checkpointer });
 
@@ -85,15 +93,23 @@ export async function runWorkflowWithLangGraph(
       );
     }
 
+    if (runtime.ticketStore) {
+      await runtime.ticketStore.setStatus(id, "completed");
+    }
     return {
       success: true,
       context: finalContext,
+      runId: id,
     };
   } catch (err) {
+    if (runtime.ticketStore) {
+      await runtime.ticketStore.setStatus(id, "failed");
+    }
     return {
       success: false,
       context: initialContext,
       error: err instanceof Error ? err : new Error(String(err)),
+      runId: id,
     };
   } finally {
     if (runRegistry) {

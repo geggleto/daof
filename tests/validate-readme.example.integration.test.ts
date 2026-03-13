@@ -21,6 +21,17 @@ vi.mock("../src/registry/registry-store.js", () => {
   };
 });
 
+vi.mock("../src/tickets/index.js", () => ({
+  createTicketStore: vi.fn(() =>
+    Promise.resolve({
+      create: vi.fn().mockResolvedValue(undefined),
+      appendUpdate: vi.fn().mockResolvedValue(undefined),
+      setStatus: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue(null),
+    })
+  ),
+}));
+
 describe("org.yaml (canonical manifest)", () => {
   const manifestPath = resolve(process.cwd(), "org.yaml");
 
@@ -41,18 +52,18 @@ describe("org.yaml (canonical manifest)", () => {
     expect(config).toHaveProperty("backbone");
   });
 
-  it("has daily_content_cycle workflow with first step ceo / check_budget", () => {
+  it("has build_on_request workflow with first step planner / produce_prd", () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const workflow = config.workflows.daily_content_cycle;
+    const workflow = config.workflows.build_on_request;
     expect(workflow).toBeDefined();
     expect(workflow.steps.length).toBeGreaterThan(0);
     const firstStep = workflow.steps[0];
     expect("agent" in firstStep).toBe(true);
     expect("action" in firstStep).toBe(true);
     if ("agent" in firstStep && "action" in firstStep) {
-      expect(firstStep.agent).toBe("ceo");
-      expect(firstStep.action).toBe("check_budget");
+      expect(firstStep.agent).toBe("planner");
+      expect(firstStep.action).toBe("produce_prd");
     }
   });
 

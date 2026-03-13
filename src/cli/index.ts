@@ -10,6 +10,7 @@ import { ZodError } from "zod";
 import { Command } from "commander";
 import { loadYaml, validate, writeOrgFile } from "../parser/index.js";
 import { createRegistryStore, getRegistryMongoUri } from "../registry/registry-store.js";
+import { createTicketStore } from "../tickets/index.js";
 import type { RegistryMetadata } from "../registry/types.js";
 import { runBuild, runPlanner, runPlannerRevise } from "../build/index.js";
 import { createScaffoldOrgConfig, isENOENT } from "../build/scaffold.js";
@@ -89,6 +90,9 @@ runCmd.action(async (file: string) => {
       });
       if (result.success) {
         console.log(`Workflow '${workflowId}' completed. Success: true.`);
+        if (result.runId) {
+          console.log(`Ticket ID: ${result.runId}`);
+        }
         if ((opts.verbose ?? 0) >= 3) {
           console.log("Output:");
           console.log(JSON.stringify(result.context, null, 2));
@@ -97,6 +101,9 @@ runCmd.action(async (file: string) => {
       } else {
         const msg = result.error?.message ?? "";
         const isCircuitOpen = /circuit is open/i.test(msg);
+        if (result.runId) {
+          console.error(`Ticket ID: ${result.runId}`);
+        }
         if (isCircuitOpen) {
           console.error(
             `Circuit breaker open after too many failures. Exiting gracefully. (${msg})`
@@ -149,6 +156,48 @@ runCmd.action(async (file: string) => {
     process.exit(1);
   }
 });
+
+const ticketCmd = program
+  .command("ticket")
+  .description("Show ticket (workflow run) history by ID. Use the Ticket ID printed after daof run.")
+  .argument("<id>", "Ticket/run ID")
+  .option("--mongo-uri <uri>", "MongoDB URI (default: REGISTRY_MONGO_URI or MONGO_URI or mongodb://localhost:27017)");
+ticketCmd.action(async (id: string) => {
+    const opts = ticketCmd.opts() as { mongoUri?: string };
+    try {
+      const uri = opts.mongoUri ?? getRegistryMongoUri();
+      const store = await createTicketStore(uri);
+      const ticket = await store.get(id);
+      if (!ticket) {
+        console.error(`Ticket not found: ${id}`);
+        process.exit(1);
+      }
+      console.log(`Ticket: ${ticket._id}`);
+      console.log(`Workflow: ${ticket.workflow_id}`);
+      console.log(`Status: ${ticket.status}`);
+      console.log(`Created: ${ticket.created_at}`);
+      console.log(`Updated: ${ticket.updated_at}`);
+      if (ticket.updates.length === 0) {
+        console.log("Updates: (none)");
+      } else {
+        console.log("Updates:");
+        for (const u of ticket.updates) {
+          const who = [u.agent_id, u.capability_id].filter(Boolean).join(" / ") || "—";
+          const msg = u.message ? ` ${u.message}` : "";
+          const step = u.step ? ` [${u.step}]` : "";
+          console.log(`  ${u.at}  ${who}${step}${msg}`);
+          if (u.payload && Object.keys(u.payload).length > 0) {
+            console.log(`    ${JSON.stringify(u.payload)}`);
+          }
+        }
+      }
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to load ticket:", message);
+      process.exit(1);
+    }
+  });
 
 const buildCmd = program
   .command("build")

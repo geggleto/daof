@@ -22,6 +22,17 @@ vi.mock("../src/registry/registry-store.js", () => {
   };
 });
 
+vi.mock("../src/tickets/index.js", () => ({
+  createTicketStore: vi.fn(() =>
+    Promise.resolve({
+      create: vi.fn().mockResolvedValue(undefined),
+      appendUpdate: vi.fn().mockResolvedValue(undefined),
+      setStatus: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue(null),
+    })
+  ),
+}));
+
 describe("workflow integration", () => {
   const manifestPath = resolve(process.cwd(), "org.yaml");
 
@@ -41,11 +52,21 @@ describe("workflow integration", () => {
     expect(result.context.planner).toBeDefined();
   }, 20000);
 
-  it("runWorkflow(runtime, 'daily_content_cycle') returns success false when workflow references undefined agent", async () => {
+  it("runWorkflow returns success false when workflow references undefined agent", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
-    const runtime = await bootstrap(config);
-    const result = await runWorkflow(runtime, "daily_content_cycle");
+    const configWithBadWorkflow = {
+      ...config,
+      workflows: {
+        ...config.workflows,
+        bad_agent: {
+          trigger: "event(test)",
+          steps: [{ agent: "nonexistent_agent", action: "logger" }],
+        },
+      },
+    };
+    const runtime = await bootstrap(configWithBadWorkflow);
+    const result = await runWorkflow(runtime, "bad_agent");
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/Workflow references unknown agent/);
   });

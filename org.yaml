@@ -9,7 +9,8 @@ agents:
     provider: cursor
     model: auto
     role: Overseer
-    description: Oversees the organization and its agents. Generates agents, capabilities, and workflows from a description.
+    description: Oversees the organization and its agents. Generates agents,
+      capabilities, and workflows from a description.
     capabilities:
       - name: generate_agents_capabilities_and_workflows
   planner:
@@ -108,7 +109,8 @@ capabilities:
       queue: build.replies
   generate_agents_capabilities_and_workflows:
     type: tool
-    description: Overseer; generates agents, capabilities, and workflows from a description (bundled stub).
+    description: Overseer; generates agents, capabilities, and workflows from a
+      description (bundled stub).
   frontend_code_writer:
     type: skill
     description: Accepts a task description (and optional tech stack, constraints,
@@ -412,8 +414,6 @@ backbone:
         type: fifo
       - name: build.replies
         type: fifo
-registry:
-  mongo_uri: mongodb://localhost:27017
 middleware:
   agent:
     - agent_metrics
@@ -432,3 +432,5 @@ fault_tolerance:
     channels:
       - slack
       - email
+registry:
+  mongo_uri: mongodb://localhost:27017
