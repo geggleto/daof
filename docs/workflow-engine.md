@@ -4,6 +4,10 @@ The workflow engine runs workflows from the org manifest: it executes steps (seq
 
 The primary way to run workflows is via the CLI: `daof run <file> [--workflow <name>]`.
 
+### Daemon mode (in-memory org, sync on shutdown)
+
+When you run `daof run <file>` **without** `--workflow`, the process runs as the long-running scheduler (heartbeat + cron + event subscriber). In this mode the org is kept **in memory**: the manifest is loaded once at startup, and any changes applied during the run (e.g. by the `merge_and_write` capability when a build is triggered via `build.requested`) update the in-memory config only, not the file. On shutdown (SIGINT or SIGTERM), the runtime writes the in-memory config back to `<file>` so that merges and upgrades are persisted. One-shot runs (`daof run <file> --workflow <name>`) and standalone `daof build` (without `--via-events`) continue to read and write the org file directly; only the scheduler path uses in-memory config with sync on exit.
+
 ---
 
 ## 1. Core types (code/JSON level)

@@ -13,6 +13,10 @@ const CapabilityDefinitionSchema = z.object({
   guards: z.array(z.string()).optional(),
   /** Capability ids this capability may call at runtime via runContext.invokeCapability. Must exist in config.capabilities. */
   depends_on: z.array(z.string()).optional(),
+  /** Metadata for registry search (optional; may be YAML or skill-generated). */
+  tags: z.array(z.string()).optional(),
+  category: z.string().optional(),
+  intent: z.string().optional(),
 });
 
 // ─── Agent (references capabilities by name) ────────────────────────────────
@@ -28,6 +32,9 @@ const AgentSchema = z.object({
   capabilities: z.array(AgentCapabilityRefSchema),
   fallback: z.string().optional(),
   max_concurrent_tasks: z.number().optional(),
+  /** Metadata for registry search (optional). */
+  tags: z.array(z.string()).optional(),
+  role_category: z.string().optional(),
 });
 
 // ─── Step: sequential or parallel ───────────────────────────────────────────
@@ -83,6 +90,13 @@ const MiddlewareSchema = z
   })
   .optional();
 
+// ─── Registry (MongoDB for skills/capabilities metadata search) ────────────────
+const RegistrySchema = z
+  .object({
+    mongo_uri: z.string().optional(),
+  })
+  .optional();
+
 // ─── Fault tolerance ─────────────────────────────────────────────────────────
 const FaultToleranceSchema = z
   .object({
@@ -129,6 +143,7 @@ const OrgSchema = z.object({
   scheduler: SchedulerSchema,
   middleware: MiddlewareSchema,
   fault_tolerance: FaultToleranceSchema,
+  registry: RegistrySchema,
 });
 
 // ─── Inferred types ─────────────────────────────────────────────────────────

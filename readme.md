@@ -7,362 +7,296 @@
 
 ![DAOF in Action](demo.gif)
 
-### **Build autonomous AI organizations with one YAML file.**
+**Build and run autonomous AI organizations from a single YAML manifest.** No glue code. No babysitting.
 
-Build autonomous AI organizations with one YAML file. No glue code. No babysitting.
+---
 
-### Install
+## What DAOF does
 
-```bash
-npm install -g daof
-```
+- **Define once, run forever** — Agents, capabilities (tools/skills), and workflows live in one org manifest. Cron and event-triggered workflows run on a scheduler; the org stays in memory and syncs back to the file on shutdown.
+- **Generate from natural language** — Use `daof build "add a summarizer skill"` to produce a PRD, generate capabilities/agents/workflows, merge into your org, and verify. Optional codegen for new tools.
+- **Plan interactively** — Use `daof plan` to develop a PRD with the Planner, revise it, then execute the full build or save for later.
+- **Trigger builds from a running org** — Run `daof run org.yaml` as a daemon, then `daof build "..." --via-events` to publish a build request; the running org executes the build and replies.
+- **Registry and curation** — Sync your org to a MongoDB registry for metadata search and duplicate detection. Use the Curator agent and `prune_registry` to archive stale entries. Query by tags or category from the CLI or via the `query_capability_registry` capability.
+- **Observability and control** — Run workflows one-shot or the full scheduler, detach with a PID file, cancel runs with `daof kill`, and use middleware (e.g. agent metrics) for step-level visibility.
 
-Or use it in a project: `npm install daof` and run via `npx daof` or `node_modules/.bin/daof`. Requires Node 20+.
+Requires **Node 20+**. LLM provider: Cursor for MVP (set `CURSOR_API_KEY`). Redis required for `daof run` (scheduler and events).
 
-### Usage
+---
 
-DAOF is used from the command line: `daof validate`, `daof run`, `daof kill`, `daof plan`, and `daof build`. There is no server or library API for MVP; run everything via the `daof` CLI.
+## Quick start
 
-**Planning interactively:** Use `daof plan [description]` to run only the Planner and interactively refine a PRD. You can revise the PRD (via natural-language feedback), save it to a file, or execute the full build with the current PRD. Use `--no-edit` for a one-shot PRD (no loop); add `--execute` to run the full build with that PRD.
-
-**Generating capabilities:** Use `daof build "<description>"` to generate capabilities, workflows, and agents from a natural-language description. The Planner produces a PRD, you review (y/n), then the Generator merges new definitions into your org manifest (default: `org.yaml` in the current directory). Use `--yolo` to skip the review step. See [docs/capabilities.md](docs/capabilities.md#generating-capabilities).
-
-**For AI agents:** Before editing or reasoning about this codebase, read [AGENTS.md](AGENTS.md). It describes the project structure and points to the full API reference with types and signatures.
-
-`org.yaml`
-```yaml
-# DAOF Manifest - v1.0
-# This file completely defines an autonomous organization.
-# Validate with: daof validate org.yaml
-# Run with: daof run org.yaml (after validation)
-
-version: "1.0"                     # Required - schema version for future compatibility
-org:
-  name: YGGMarketing               # Human-readable name
-  description: >-
-    Autonomous marketing team for YGG games. Generates content, posts to X, tracks engagement.
-  goals:                           # High-level objectives (used by CEO/supervisor agents)
-    - maximize_organic_engagement
-    - stay_under_monthly_budget: 1500  # USD or API credits
-    - maintain_brand_compliance
-
-# ──────────────────────────────────────────────────────────────────────────────
-# AGENTS
-# Each agent is an LLM instance with a role and a set of capabilities it can use
-# ──────────────────────────────────────────────────────────────────────────────
-agents:
-  ceo:
-    provider: cursor                 # LLM provider (Cursor only for MVP; API key: CURSOR_API_KEY)
-    model: auto                      # model id for that provider
-    role: "Chief Executive Officer"
-    description: Oversees budget, approves major strategies, monitors KPIs
-    capabilities:
-      - name: check_budget
-      - name: alert_board
-      - name: gitactor_scanner        # Reuse the scanner for output quality
-    fallback: ceo_backup             # Optional: agent name to use if this one is offline
-    max_concurrent_tasks: 3
-
-  cmo:
-    provider: cursor
-    model: auto
-    role: "Chief Marketing Officer"
-    description: Defines per-game content strategy and asset volume
-    capabilities:
-      - name: generate_strategy
-      - name: image_gen
-      - name: gitactor_scanner
-    max_concurrent_tasks: 5
-
-  content_writer:
-    provider: cursor
-    model: auto
-    role: "Content Writer"
-    description: Generates captions, threads, blog posts
-    capabilities:
-      - name: gitactor_scanner        # Scan own output before passing downstream
-      - name: text_formatter
-
-  content_designer:
-    provider: cursor
-    model: auto
-    role: "Content Designer"
-    description: Creates images & short videos
-    capabilities:
-      - name: image_gen
-      - name: video_gen_short
-      - name: gitactor_scanner
-
-  visual_qa:
-    provider: cursor
-    model: auto
-    role: "Visual Quality Assurance"
-    description: Reviews visuals for branding, errors, relevance
-    capabilities:
-      - name: gitactor_scanner
-
-  compliance_qa:
-    provider: cursor
-    model: auto
-    role: "Compliance & Legal QA"
-    description: Checks for IP, spoilers, brand safety, legal risk
-    capabilities:
-      - name: gitactor_scanner
-
-  content_manager:
-    provider: cursor
-    model: auto
-    role: "Content Manager"
-    description: Assembles final posts and publishes
-    capabilities:
-      - name: post_to_x
-      - name: schedule_post
-      - name: gitactor_scanner
-
-  data_analyst:
-    provider: cursor
-    model: auto
-    role: "Data Analyst"
-    description: Collects X metrics hourly, generates insights
-    capabilities:
-      - name: get_x_metrics
-      - name: upsert_metric
-      - name: generate_report
-
-# ──────────────────────────────────────────────────────────────────────────────
-# CAPABILITIES
-# Reusable building blocks (tools, skills, or hybrids) that agents can call.
-# Capabilities can also call other capabilities via depends_on and runContext.invokeCapability — see [docs/capabilities.md](docs/capabilities.md) and [docs/workflow-engine.md](docs/workflow-engine.md).
-# ──────────────────────────────────────────────────────────────────────────────
-capabilities:
-  image_gen:
-    type: tool
-    description: Generate images using Hugging Face endpoint
-    config:
-      endpoint: "https://your-flux-endpoint.hf.space"
-      api_key: env(HF_API_KEY)
-      default_batch_size: 5
-      max_batch_size: 20
-    persistence: sql_events          # Log every generation
-
-  gitactor_scanner:
-    type: tool
-    description: Security & quality scan using gitactor.dev
-    config:
-      endpoint: "http://localhost:3000/scan"   # or hosted URL
-      api_key: env(GITACTOR_API_KEY)
-      default_mode: full
-      auto_reject_threshold: 60
-    persistence: sql_events
-
-  post_to_x:
-    type: tool
-    description: Publish content to X
-    config:
-      api_key: env(X_API_KEY)
-      api_secret: env(X_API_SECRET)
-      access_token: env(X_ACCESS_TOKEN)
-      access_secret: env(X_ACCESS_SECRET)
-    rate_limit: 3 per minute
-
-  # ... add more as needed
-
-# ──────────────────────────────────────────────────────────────────────────────
-# WORKFLOWS
-# Named sequences of steps triggered by cron or events
-# ──────────────────────────────────────────────────────────────────────────────
-workflows:
-  daily_content_cycle:
-    trigger: cron(0 9 * * *)               # 9 AM daily
-    description: Full daily content generation & posting
-    persistence: sql_events                # Store checkpoints
-    steps:
-      - agent: ceo
-        action: check_budget
-        on_failure: alert_and_halt
-      - agent: cmo
-        action: generate_strategy
-      - parallel:
-          - agent: content_writer
-            action: write_post
-          - agent: content_designer
-            action: generate_assets
-            params:
-              batch_size: "{{ cmo.recommended_variants }}"
-      - agent: visual_qa
-        action: review_assets
-      - agent: compliance_qa
-        action: final_compliance_check
-      - agent: content_manager
-        action: assemble_and_post
-        condition: "{{ visual_qa.verdict == 'approve' && compliance_qa.verdict == 'approve' }}"
-
-  hourly_metrics:
-    trigger: cron(0 * * * *)
-    description: Pull X metrics and store
-    steps:
-      - agent: data_analyst
-        action: collect_metrics
-
-# ──────────────────────────────────────────────────────────────────────────────
-# BACKBONE & FAULT TOLERANCE
-# ──────────────────────────────────────────────────────────────────────────────
-backbone:
-  type: redis                              # or rabbitmq, kafka
-  config:
-    url: redis://localhost:6379
-    queues:
-      - name: events
-        type: pubsub
-      - name: dlq
-        type: fifo                         # dead-letter queue
-
-fault_tolerance:
-  health_checks_interval: 5m
-  rogue_detection:
-    - hallucination_guard
-    - output_length_limit: 4000 chars
-  retries:
-    default: 3
-    backoff: exponential
-  circuit_breaker:
-    threshold: 5 failures
-    reset_after: 10m
-  dead_letter_queue: true
-  alerts:
-    webhook: env(ALERT_WEBHOOK_URL)
-    channels: [slack, email]
-```
-
-Then validate and run:
-`daof validate org.yaml` — check your manifest is valid.
-`daof run org.yaml` — start the org (when runtime is available).
-
-And watch your fully autonomous marketing org come alive — agents strategizing, generating content, posting to X, tracking metrics, all while surviving crashes, hallucinations, API outages, and budget limits.
-No more glue code. No more brittle agent scripts. No more "it worked on my machine" mornings.
-DAOF is the missing piece between "cool agent demo" and "this thing runs my business 24/7 without babysitting.
-
-### Quick Start (5 minutes)
-
-1. Create org.yaml (copy the example above or use the generator).
-2. Install DAOF (or build from repo: `npm run build`):
+### 1. Install
 
 ```bash
 npm install -g daof
-# or
-bun add -g daof
 ```
 
-3. Start Redis (required for `daof run`). From the repo root: `docker compose up -d`. Or use a hosted Redis URL in your manifest (e.g. Upstash, Redis Cloud).
-4. Validate your manifest:
+Or in a project: `npm install daof` and run via `npx daof` or `node_modules/.bin/daof`.
+
+### 2. Environment
+
+- **Cursor (LLM):** `CURSOR_API_KEY` for plan, build, and agent steps.
+- **Redis:** Used by the scheduler and event workflows. Set in the org manifest (e.g. `backbone.config.url: redis://localhost:6379`) or use a hosted Redis URL.
+- **Registry (optional):** `REGISTRY_MONGO_URI` or `MONGO_URI` (or `registry.mongo_uri` in the manifest) for the skills/capabilities registry.
+
+### 3. Start Redis (for `daof run`)
+
+From the repo root:
+
+```bash
+docker compose up -d
+```
+
+Or use a hosted Redis and set the URL in your manifest.
+
+### 4. Validate and run
+
+```bash
+daof validate org.yaml
+daof run org.yaml
+```
+
+Without `--workflow`, the org runs as the long-running scheduler (heartbeat + cron + event subscriber). The manifest is kept in memory; changes from workflows (e.g. build-on-request) are written back to the file on shutdown (SIGINT/SIGTERM). See [Daemon mode](docs/workflow-engine.md#daemon-mode-in-memory-org-sync-on-shutdown).
+
+---
+
+## CLI reference
+
+Every command is run via the `daof` CLI. Below is an example of each command and its main options.
+
+### Validate
+
+Check that an org manifest is valid YAML and passes schema validation.
 
 ```bash
 daof validate org.yaml
 ```
 
-5. Run the org:
+Example output: `Valid. (org: MyOrg).`
+
+---
+
+### Run
+
+Load, validate, bootstrap, and either run the **scheduler** (all cron and event workflows) or a **single workflow** once.
+
+**Run the org (scheduler):**
 
 ```bash
 daof run org.yaml
 ```
 
-To run a single workflow once: `daof run org.yaml --workflow hourly_metrics`.
+**Run one workflow (one-shot):**
 
-That's it. Your agents are now alive, talking over queues, persisting state, checking each other for sanity, and doing real work.
-
-### Extend the framework
 ```bash
-node dist/cli/index.js build "Add a capability that allows an agent to write principal level frontend code" \
-  --file org.example.yaml \          
-  --yolo --bundle
-✔ Planner done.
---- PRD ---
----
-
-## PRD: Principal-Level Frontend Code Writer
-
-### Summary
-
-Add a capability that enables an agent to generate production-grade, architecturally sound frontend code at a principal-engineer level of quality. This includes component architecture, state management, accessibility, performance optimization, and adherence to modern frontend best practices.
-
-### What will be generated
-
-#### Capabilities (1 new)
-
-| ID | Type | Description |
-|----|------|-------------|
-| `frontend_code_writer` | skill | Accepts a task description (and optional tech stack, constraints, existing code context) and produces principal-quality frontend code. The prompt template enforces principal-engineer standards: component decomposition, semantic HTML, accessibility (WCAG 2.1 AA), performance-conscious rendering, proper TypeScript typing, idiomatic state management, error boundaries, and test scaffolding. Uses `config.endpoint` (same LLM provider as org) for generation. |
-
-**Prompt emphasis areas** (encoded in the skill prompt template):
-- Clean component architecture with single-responsibility, composability, and clear prop contracts.
-- TypeScript strict mode; no `any` types; discriminated unions where appropriate.
-- Accessibility-first markup (ARIA, keyboard navigation, focus management).
-- Performance patterns (memoization, lazy loading, virtualization guidance when relevant).
-- Idiomatic CSS/styling approach (CSS modules, Tailwind, or styled-components — caller-specified).
-- Error handling (error boundaries, graceful degradation, loading/empty states).
-- Testability (co-located test outline or hook extraction for unit testing).
-
-**Inputs:**
-- `task` (required) — natural-language description of the frontend feature or component.
-- `stack` (optional) — framework/library preferences (e.g. `"React 18, TypeScript, Tailwind"`). Defaults to React + TypeScript.
-- `context` (optional) — existing code or architectural context to align with.
-- `constraints` (optional) — additional constraints (e.g. `"must support SSR"`, `"no external state library"`).
-
-**Output:** `{ text }` — the generated code with inline explanations of architectural decisions where non-obvious.
-
-#### Agents (1 new)
-
-| ID | Role | Capabilities | Description |
-|----|------|-------------|-------------|
-| `frontend_engineer` | Principal Frontend Engineer | `frontend_code_writer`, `logger` | Writes production-grade frontend code on demand. Can be assigned to workflow steps that require frontend implementation. |
-
-#### Workflows (0 new)
-
-No new workflow is proposed. The `frontend_engineer` agent and `frontend_code_writer` capability are available for use in existing or future workflows. Users can invoke the agent in any workflow step via `action: frontend_code_writer`.
-
-### Existing capabilities reused
-
-- `logger` — attached to the new agent for observability.
-- `text_generator` — **not** depended on directly; the skill uses its own `config.endpoint` for LLM calls (same pattern).
-
-### Out of scope
-
-- File-system write (the capability returns code as text; a separate capability or workflow step handles persistence).
-- Automated test execution or CI integration.
-- Backend code generation.
------------
-✔ Generator done.
-✔ Similarity check done.
-✔ Generator done.
-✔ Similarity check done.
-✔ Generator done.
-✔ Similarity check done.
-✔ Generator done.
-✔ Similarity check done.
-✔ Merge done. Added 2 definition(s).
-✔ Verifier pass.
-Added 2 capability/agent/workflow definition(s) to org.example.yaml.
+daof run org.yaml --workflow hourly_metrics
 ```
 
-### Documentation
+**Run in background (scheduler only):**
 
-- [docs/prd.md](docs/prd.md) — Product requirements and phases
-- [docs/tip.md](docs/tip.md) — Technical implementation plan and manifest spec
-- [docs/workflow-engine.md](docs/workflow-engine.md) — Workflow engine: inputs/outputs, types, templates, and API at a code/JSON level
-- [docs/capabilities.md](docs/capabilities.md) — Capability-to-capability calls: depends_on and invokeCapability
-- [docs/authentication.md](docs/authentication.md) — Authentication for external capabilities (strategy/adapter, per-capability config)
-- [docs/backbone.md](docs/backbone.md) — Backbone (queues): adapter interface, Redis adapter, factory, and runtime integration
-- [docs/verification.md](docs/verification.md) — Requirements traceability and verification
+```bash
+daof run org.yaml -d
+daof run org.yaml --detach --pid-file /var/run/daof.pid
+```
 
-### Contributing
-We want this to become the standard way people define agentic systems.
+**Verbosity:**
 
-Got a killer capability? Submit a PR to the capability registry repo
-Found a bug in fault handling? Issues welcome.
-Want to add Kafka support or a new queue adapter? Fork & PR.
+```bash
+daof run org.yaml -v
+daof run org.yaml --workflow build_on_request -vvv
+```
 
-### License
-MIT — free to use, fork, sell, embed, whatever.
-Built with ❤️ by @geggleto + cursor + grok + community
-Star the repo if you want to see this become the default way people run autonomous AI teams.
-Let's make agent orchestration boringly reliable.
+| Option | Description |
+|--------|-------------|
+| `--workflow <name>` | Run the named workflow once and exit. Omit to run the scheduler. |
+| `-d`, `--detach` | Run the scheduler in the background (only when not using `--workflow`). |
+| `--pid-file <path>` | PID file when using `-d` (default: `daof.pid` in cwd). |
+| `-v`, `--verbose` | Increase verbosity; `-vvv` prints workflow output JSON. |
+
+---
+
+### Build
+
+Generate capabilities, workflows, and agents from a natural-language description. Planner → review (unless `--yolo` or `--via-events`) → Generator → similarity check → merge → validate → write → optional codegen → Verifier.
+
+**Basic build (interactive review):**
+
+```bash
+daof build "Add a capability that summarizes text"
+```
+
+**Skip review:**
+
+```bash
+daof build "Add a summarizer skill" --yolo
+```
+
+**Target a specific org file:**
+
+```bash
+daof build "Add an image generator" --file ./my-org.yaml
+```
+
+**Trigger build on a running org (no local review):**
+
+```bash
+daof build "Add a new workflow for weekly reports" --via-events
+```
+
+**Disable codegen / custom codegen dir:**
+
+```bash
+daof build "Add a logger capability" --no-codegen
+daof build "Add a custom tool" --codegen-dir ./my-capabilities
+```
+
+**Add generated capability to framework source (repo root):**
+
+```bash
+daof build "Add a principal-level frontend code writer" --yolo --bundle
+```
+
+| Option | Description |
+|--------|-------------|
+| `--file <path>` | Org manifest to update (default: `org.yaml`). |
+| `--yolo` | Skip PRD review and proceed immediately. |
+| `--provider <id>` | LLM provider (default: `cursor`). |
+| `--via-events` | Publish `build.requested` and wait for reply from running org. |
+| `--no-codegen` | Disable capability source code generation. |
+| `--codegen-dir <path>` | Directory for generated sources (default: `generated/capabilities`). |
+| `--bundle` | Write capability into `src/capabilities/bundled` and register (run from repo root). |
+| `-v`, `--verbose` | Verbosity; `-vv` parse/summary, `-vvv` raw LLM output. |
+
+---
+
+### Plan
+
+Interactively develop a PRD with the Planner. Optionally revise, save, or execute the full build.
+
+**Interactive (prompt for description, then menu):**
+
+```bash
+daof plan
+daof plan "Add a metrics dashboard capability"
+```
+
+**One-shot PRD (no menu):**
+
+```bash
+daof plan "Add a summarizer" --no-edit
+```
+
+**One-shot PRD and run full build:**
+
+```bash
+daof plan "Add a summarizer" --no-edit --execute
+```
+
+**Custom org file and provider:**
+
+```bash
+daof plan --file ./org.yaml --provider cursor
+```
+
+| Option | Description |
+|--------|-------------|
+| `--file <path>` | Org manifest for context and execute (default: `org.yaml`). |
+| `--provider <id>` | LLM provider (default: `cursor`). |
+| `--no-edit` | Print PRD and exit (no interactive loop). |
+| `--execute` | With `--no-edit`: run the full build with the generated PRD. |
+| `-v`, `--verbose` | Verbosity. |
+
+---
+
+### Registry
+
+Sync the org to the skills/capabilities registry (MongoDB) or query by tags/category.
+
+**Sync org to registry:**
+
+```bash
+daof registry sync
+daof registry sync --file org.yaml
+```
+
+**Query by tags:**
+
+```bash
+daof registry query --tags "image,http"
+```
+
+**Query by category:**
+
+```bash
+daof registry query --category content
+```
+
+**List all:**
+
+```bash
+daof registry query
+```
+
+| Command | Option | Description |
+|---------|--------|-------------|
+| `registry sync` | `--file <path>` | Org manifest to sync (default: `org.yaml`). |
+| `registry query` | `--tags <list>` | Comma-separated tags. |
+| `registry query` | `--category <name>` | Category name. |
+
+---
+
+### Kill
+
+Cancel a running workflow by run ID (requires Redis run registry).
+
+```bash
+daof kill <run_id> org.yaml
+```
+
+Example: `daof kill abc-123 org.yaml`
+
+---
+
+## Manifest overview
+
+The org manifest is a YAML file with:
+
+- **org** — Name, description, goals.
+- **agents** — LLM-backed agents (provider, model, role, capabilities list).
+- **capabilities** — Tools, skills, or hybrids (type, description, config, optional `depends_on`, `source`, `persistence`).
+- **workflows** — Named workflows with `trigger` (e.g. `cron(0 9 * * *)` or `event(build.requested)`) and `steps` (agent + action, optional params, conditions, parallel blocks).
+- **backbone** — Queue adapter (e.g. Redis) and queue definitions.
+- **registry** (optional) — MongoDB URI for the skills/capabilities registry.
+- **middleware** (optional) — Agent/capability middleware (e.g. `agent_metrics`).
+
+Validate with `daof validate org.yaml`. See [docs/workflow-engine.md](docs/workflow-engine.md), [docs/capabilities.md](docs/capabilities.md), and [docs/registry.md](docs/registry.md) for details. Example manifests: [org.yaml](org.yaml) (canonical), [examples/](examples/).
+
+---
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [AGENTS.md](AGENTS.md) | Entry point for AI agents; project layout and API reference. |
+| [docs/workflow-engine.md](docs/workflow-engine.md) | Workflow engine, triggers, daemon mode, runWorkflow. |
+| [docs/capabilities.md](docs/capabilities.md) | Capabilities, depends_on, invokeCapability, skills. |
+| [docs/build-flow.md](docs/build-flow.md) | Build flow (Planner, Generator, merge, Verifier, event mode). |
+| [docs/build-events.md](docs/build-events.md) | build.requested, build.replies, payloads. |
+| [docs/registry.md](docs/registry.md) | Registry, staleness, prune_registry, Curator. |
+| [docs/backbone.md](docs/backbone.md) | Backbone (queues), Redis, semaphore, run registry. |
+| [docs/authentication.md](docs/authentication.md) | Auth for external capabilities. |
+| [docs/verification.md](docs/verification.md) | Requirements traceability and verification. |
+| [docs/prd.md](docs/prd.md), [docs/tip.md](docs/tip.md), [docs/backlog.md](docs/backlog.md) | Product and backlog. |
+
+---
+
+## Contributing
+
+We want DAOF to become the standard way to define agentic systems. PRs welcome: new capabilities, backbone adapters, or fixes. See [AGENTS.md](AGENTS.md) for structure and types.
+
+---
+
+## License
+
+MIT. Built with care by @geggleto and community. Star the repo if you want agent orchestration to be boringly reliable.

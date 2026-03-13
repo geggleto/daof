@@ -28,7 +28,7 @@ import {
 import { bootstrap } from "../runtime/bootstrap.js";
 import type { OrgRuntime } from "../runtime/bootstrap.js";
 import { createScaffoldOrgConfig, isENOENT } from "./scaffold.js";
-import { runSimilarityCheck } from "./similarity.js";
+import { runSimilarityCheck, runRegistryDuplicateCheck } from "./similarity.js";
 import { runBuildViaEvents } from "./events.js";
 import {
   runPlannerAgent,
@@ -190,7 +190,7 @@ export async function runBuild(
     }
   }
 
-  const existingCapabilityIds = Object.keys(config.capabilities);
+  let existingCapabilityIds = Object.keys(config.capabilities);
   const verbose = options.verbose ?? 0;
 
   if (verbose >= 1) {
@@ -210,6 +210,10 @@ export async function runBuild(
   }
 
   const runtime = await bootstrap(config);
+  if (runtime.registry) {
+    const fromReg = await runtime.registry.listAll();
+    existingCapabilityIds = [...new Set([...existingCapabilityIds, ...fromReg.capability_ids])];
+  }
   const useAgents = hasBuildAgents(runtime);
 
   if (!useAgents) {
@@ -287,7 +291,16 @@ export async function runBuild(
         const simSpinner = ora("Checking similarity…").start();
         if (verbose >= 1) console.error("[build] Checking similarity...");
         try {
-          const duplicates = await runSimilarityCheck(providerId, config, generatedForMerge);
+          const registryDuplicates = runtime.registry
+            ? await runRegistryDuplicateCheck(runtime.registry, generatedForMerge)
+            : [];
+          const llmDuplicates = await runSimilarityCheck(providerId, config, generatedForMerge);
+          const duplicates = [...registryDuplicates];
+          for (const d of llmDuplicates) {
+            if (!duplicates.some((x) => (x.id1 === d.id1 && x.id2 === d.id2) || (x.id1 === d.id2 && x.id2 === d.id1))) {
+              duplicates.push(d);
+            }
+          }
           simSpinner.succeed("Similarity check done.");
           if (verbose >= 1) console.error("[build] Similarity check done.");
           if (duplicates.length > 0) {
@@ -425,7 +438,16 @@ export async function runBuild(
         const simSpinner = ora("Checking similarity…").start();
         if (verbose >= 1) console.error("[build] Checking similarity...");
         try {
-          const duplicates = await runSimilarityCheck(providerId, config, generated);
+          const registryDuplicates = runtime.registry
+            ? await runRegistryDuplicateCheck(runtime.registry, generated)
+            : [];
+          const llmDuplicates = await runSimilarityCheck(providerId, config, generated);
+          const duplicates = [...registryDuplicates];
+          for (const d of llmDuplicates) {
+            if (!duplicates.some((x) => (x.id1 === d.id1 && x.id2 === d.id2) || (x.id1 === d.id2 && x.id2 === d.id1))) {
+              duplicates.push(d);
+            }
+          }
           simSpinner.succeed("Similarity check done.");
           if (verbose >= 1) console.error("[build] Similarity check done.");
           if (duplicates.length > 0) {

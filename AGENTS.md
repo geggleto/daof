@@ -43,4 +43,5 @@ For the **full class and type map**, and **all exported function/interface signa
 - [docs/providers.md](docs/providers.md) — Provider service layer: LLMProviderService, getProviderService, Cursor implementation.
 - [docs/authentication.md](docs/authentication.md) — Auth strategies for external capabilities.
 - [docs/verification.md](docs/verification.md) — Requirements traceability and verification.
+- [docs/registry.md](docs/registry.md) — Skills/capabilities registry (MongoDB), staleness, archiving, prune_registry, Curator agent.
 - [docs/prd.md](docs/prd.md), [docs/tip.md](docs/tip.md), [docs/backlog.md](docs/backlog.md) — Product and backlog context.

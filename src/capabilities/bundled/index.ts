@@ -26,6 +26,9 @@ import "./verify_similarity.js";
 import "./build_reply.js";
 import "./fetch_agent_performance.js";
 import "./apply_capability_upgrade.js";
+import "./query_capability_registry.js";
+import "./prune_registry.js";
+import "./generate_agents_capabilities_and_workflows.js";
 
 export type { BundledCapabilityFactory };
 

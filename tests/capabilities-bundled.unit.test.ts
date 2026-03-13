@@ -11,6 +11,9 @@ import { createXPosterInstance } from "../src/capabilities/bundled/x_poster.js";
 import { createMetricsFetcherInstance } from "../src/capabilities/bundled/metrics_fetcher.js";
 import { createFileUploaderInstance } from "../src/capabilities/bundled/file_uploader.js";
 import { createSkillRunnerInstance } from "../src/capabilities/bundled/skill_runner.js";
+import { createQueryCapabilityRegistryInstance } from "../src/capabilities/bundled/query_capability_registry.js";
+import { createPruneRegistryInstance } from "../src/capabilities/bundled/prune_registry.js";
+import { createMergeAndWriteInstance } from "../src/capabilities/bundled/merge_and_write.js";
 import { writeFile, mkdir, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -261,5 +264,167 @@ describe("SkillRunner", () => {
     const cap = createSkillRunnerInstance("my_skill", def);
     const out = await cap.execute({});
     expect(out).toEqual({ text: "Hi " });
+  });
+});
+
+describe("QueryCapabilityRegistry", () => {
+  it("returns error when runContext has no registry", async () => {
+    const cap = createQueryCapabilityRegistryInstance("query_capability_registry", emptyDef);
+    const out = await cap.execute({ tags: ["x"] }, {});
+    expect(out).toMatchObject({ ok: false });
+    expect((out as { error?: string }).error).toMatch(/registry|not connected/i);
+  });
+
+  it("returns capability_ids and agent_ids from queryByTags when tags provided", async () => {
+    const cap = createQueryCapabilityRegistryInstance("query_capability_registry", emptyDef);
+    const runContext = {
+      registry: {
+        listAll: vi.fn().mockResolvedValue({ capability_ids: ["c1"], agent_ids: ["a1"] }),
+        queryByTags: vi.fn().mockResolvedValue({ capability_ids: ["image_generator"], agent_ids: [] }),
+        queryByCategory: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        getCapability: vi.fn().mockResolvedValue(null),
+        getAgent: vi.fn().mockResolvedValue(null),
+        upsertCapability: vi.fn().mockResolvedValue(undefined),
+        upsertAgent: vi.fn().mockResolvedValue(undefined),
+        listStale: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        archiveStale: vi.fn().mockResolvedValue({ archived_capability_ids: [], archived_agent_ids: [] }),
+      },
+    };
+    const out = await cap.execute({ tags: ["image"] }, runContext);
+    expect(out).toEqual({ capability_ids: ["image_generator"], agent_ids: [] });
+  });
+
+  it("returns listAll result when no tags or category", async () => {
+    const cap = createQueryCapabilityRegistryInstance("query_capability_registry", emptyDef);
+    const listAll = vi.fn().mockResolvedValue({ capability_ids: ["c1"], agent_ids: ["a1"] });
+    const runContext = {
+      registry: {
+        listAll,
+        queryByTags: vi.fn(),
+        queryByCategory: vi.fn(),
+        getCapability: vi.fn().mockResolvedValue(null),
+        getAgent: vi.fn().mockResolvedValue(null),
+        upsertCapability: vi.fn().mockResolvedValue(undefined),
+        upsertAgent: vi.fn().mockResolvedValue(undefined),
+        listStale: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        archiveStale: vi.fn().mockResolvedValue({ archived_capability_ids: [], archived_agent_ids: [] }),
+      },
+    };
+    const out = await cap.execute({}, runContext);
+    expect(out).toEqual({ capability_ids: ["c1"], agent_ids: ["a1"] });
+    expect(listAll).toHaveBeenCalled();
+  });
+});
+
+describe("PruneRegistry", () => {
+  it("returns error when runContext has no registry", async () => {
+    const cap = createPruneRegistryInstance("prune_registry", emptyDef);
+    const out = await cap.execute({ older_than_days: 90 }, {});
+    expect(out).toMatchObject({ ok: false });
+    expect((out as { error?: string }).error).toMatch(/registry|not connected/i);
+  });
+
+  it("returns dry_run result when dry_run true", async () => {
+    const cap = createPruneRegistryInstance("prune_registry", emptyDef);
+    const listStale = vi.fn().mockResolvedValue({ capability_ids: ["old_cap"], agent_ids: ["old_agent"] });
+    const runContext = {
+      registry: {
+        listStale,
+        archiveStale: vi.fn(),
+        listAll: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        queryByTags: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        queryByCategory: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        getCapability: vi.fn().mockResolvedValue(null),
+        getAgent: vi.fn().mockResolvedValue(null),
+        upsertCapability: vi.fn().mockResolvedValue(undefined),
+        upsertAgent: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const out = await cap.execute({ older_than_days: 30, dry_run: true }, runContext);
+    expect(out).toEqual({
+      ok: true,
+      archived_capability_ids: ["old_cap"],
+      archived_agent_ids: ["old_agent"],
+      dry_run: true,
+    });
+    expect(listStale).toHaveBeenCalledWith({ olderThanDays: 30, includeArchived: false });
+    expect(runContext.registry.archiveStale).not.toHaveBeenCalled();
+  });
+
+  it("calls archiveStale when dry_run false", async () => {
+    const cap = createPruneRegistryInstance("prune_registry", emptyDef);
+    const listStale = vi.fn().mockResolvedValue({ capability_ids: ["c1"], agent_ids: [] });
+    const archiveStale = vi.fn().mockResolvedValue({ archived_capability_ids: ["c1"], archived_agent_ids: [] });
+    const runContext = {
+      registry: {
+        listStale,
+        archiveStale,
+        listAll: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        queryByTags: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        queryByCategory: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+        getCapability: vi.fn().mockResolvedValue(null),
+        getAgent: vi.fn().mockResolvedValue(null),
+        upsertCapability: vi.fn().mockResolvedValue(undefined),
+        upsertAgent: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const out = await cap.execute({ older_than_days: 90 }, runContext);
+    expect(out).toMatchObject({ ok: true, dry_run: false, archived_capability_ids: ["c1"], archived_agent_ids: [] });
+    expect(archiveStale).toHaveBeenCalledWith({ olderThanDays: 90 });
+  });
+});
+
+describe("Merge_and_write", () => {
+  const baseConfig = {
+    version: "1.0" as const,
+    org: { name: "Test", goals: [] },
+    agents: {} as Record<string, unknown>,
+    capabilities: { existing: { type: "tool" as const, description: "Existing" } },
+    workflows: {} as Record<string, unknown>,
+    backbone: { type: "redis" as const, config: { url: "redis://localhost", queues: [] } },
+  };
+
+  it("when runContext has getCurrentOrgConfig and updateOrgConfig, uses in-memory config as base and calls updateOrgConfig (no writeOrgFile)", async () => {
+    const updateOrgConfig = vi.fn();
+    const currentConfig = { ...baseConfig };
+    const runContext = {
+      getCurrentOrgConfig: () => currentConfig,
+      updateOrgConfig,
+    };
+    const generatedYaml = `
+capabilities:
+  new_cap:
+    type: tool
+    description: New cap
+agents: {}
+workflows: {}
+`;
+    const cap = createMergeAndWriteInstance("merge_and_write", { type: "tool" });
+    const out = await cap.execute(
+      { org_path: "/tmp/org.yaml", generated_yaml: generatedYaml },
+      runContext as never
+    );
+    expect(out).toMatchObject({ summary: expect.any(String), added_count: 1 });
+    expect(updateOrgConfig).toHaveBeenCalledTimes(1);
+    const merged = updateOrgConfig.mock.calls[0][0];
+    expect(merged.capabilities).toHaveProperty("existing");
+    expect(merged.capabilities).toHaveProperty("new_cap");
+  });
+
+  it("when runContext has no updateOrgConfig, returns error for missing file (loadYaml fails) unless path exists", async () => {
+    const cap = createMergeAndWriteInstance("merge_and_write", { type: "tool" });
+    const generatedYaml = `
+capabilities:
+  new_cap:
+    type: tool
+    description: New
+agents: {}
+workflows: {}
+`;
+    const out = await cap.execute(
+      { org_path: "/nonexistent/org.yaml", generated_yaml: generatedYaml },
+      undefined
+    );
+    expect(out).toMatchObject({ ok: false, error: expect.stringContaining("Failed to load") });
   });
 });

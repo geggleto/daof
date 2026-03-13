@@ -4,6 +4,7 @@ import type { CapabilityInstance } from "../types/json.js";
 import type { BackboneAdapter } from "../backbone/types.js";
 import type { CheckpointStore } from "../backbone/checkpoint-store.js";
 import type { CapabilityStore } from "../backbone/capability-store.js";
+import type { RegistryStore } from "../registry/registry-store.js";
 import type { AgentMiddleware, CapabilityMiddleware } from "./middleware.js";
 export type { RunContext } from "./run-context.js";
 import { resolveEnv } from "../config/resolve-env.js";
@@ -12,11 +13,14 @@ import { bootstrapAgents } from "../agents/bootstrap.js";
 import { createBackbone } from "../backbone/factory.js";
 import { resolveAgentMiddlewares, resolveCapabilityMiddlewares } from "./middleware-registry.js";
 import { createScopedCapabilityStore } from "../backbone/capability-store.js";
+import { createRegistryStore, getRegistryMongoUri } from "../registry/registry-store.js";
 
 export interface OrgRuntime {
   config: OrgConfig;
   capabilities: Map<string, CapabilityInstance>;
   agents: Map<string, Agent>;
+  /** When set, this process is the long-running daemon; sync config to this path on shutdown. */
+  orgFilePath?: string;
   /** Set when backbone is connected (e.g. via connectBackbone). */
   backbone?: BackboneAdapter;
   /** Set when backbone is Redis (uses keyspace daof:checkpoint:*). */
@@ -25,6 +29,8 @@ export interface OrgRuntime {
   capabilityStore?: CapabilityStore;
   /** Scoped store for agent metrics (agent_metrics middleware and fetch_agent_performance). Set in connectBackbone when capabilityStore exists. */
   metricsStore?: CapabilityStore;
+  /** Skills/capabilities registry (MongoDB). Set when MongoDB config present and connection succeeds. */
+  registry?: RegistryStore;
   /** Agent middleware pipeline (from config.middleware.agent). */
   agentMiddleware?: AgentMiddleware[];
   /** Capability middleware pipeline (from config.middleware.capability). */
@@ -53,6 +59,17 @@ export async function bootstrap(config: OrgConfig): Promise<OrgRuntime> {
   }
   const agents = bootstrapAgents(resolved, capabilities, runtime);
   runtime.agents = agents;
+
+  const registryUri = getRegistryMongoUri(resolved.registry?.mongo_uri);
+  try {
+    runtime.registry = await createRegistryStore(registryUri);
+  } catch (err) {
+    // MongoDB optional; leave registry undefined if connection fails (e.g. not running)
+    if (process.env.DAOF_REGISTRY_VERBOSE === "1") {
+      console.warn("[daof] Registry (MongoDB) connection skipped or failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
   return runtime;
 }
 

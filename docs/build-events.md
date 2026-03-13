@@ -1,6 +1,6 @@
 # Build events
 
-When the org is running (`daof run`), build can be triggered by publishing a **build.requested** event on the backbone. The org runs the build workflow (Planner → Generator → merge → Verifier) and publishes the result to **build.replies**. The CLI can use **`daof build "description" --via-events`** to publish and wait for the reply (no interactive review).
+When the org is running (`daof run`), build can be triggered by publishing a **build.requested** event on the backbone. The org runs the build workflow (Planner → Generator → merge → Verifier) and publishes the result to **build.replies**. The CLI can use **`daof build "description" --via-events`** to publish and wait for the reply (no interactive review). When the org is running as the **daemon** (scheduler without `--workflow`), **merge_and_write** updates the in-memory org config; the org file is synced to disk when the daemon shuts down (see [workflow-engine.md](workflow-engine.md#daemon-mode-in-memory-org-sync-on-shutdown)).
 
 ## Event: build.requested
 

@@ -1,4 +1,5 @@
 import type { BackboneAdapter } from "../backbone/types.js";
+import type { RegistryStore } from "../registry/registry-store.js";
 import type { CapabilityInput, CapabilityOutput } from "../types/json.js";
 import type { OrgConfig } from "../schema/index.js";
 import type { CapabilityInstance } from "../types/json.js";
@@ -37,6 +38,12 @@ export interface RunContext {
   metricsStore?: CapabilityStore;
   /** When present, the current agent's provider/model/API key for LLM calls. Passed from executor; nested invocations inherit it. */
   agentLlm?: AgentLlm;
+  /** When present, skills/capabilities registry for metadata search (query_capability_registry, etc.). */
+  registry?: RegistryStore;
+  /** When present (daemon mode), capabilities should call this to replace the in-memory org config instead of writing to disk. */
+  updateOrgConfig?: (config: OrgConfig) => void;
+  /** When present (daemon mode), capabilities use this as the current config for merge/patch so the base is in-memory state. */
+  getCurrentOrgConfig?: () => OrgConfig;
 }
 
 /**
@@ -48,7 +55,10 @@ export interface RunContextFactoryDeps {
   backbone?: BackboneAdapter;
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
+  registry?: RegistryStore;
   capabilityMiddleware?: import("./middleware.js").CapabilityMiddleware[];
+  /** When set (daemon mode), createRunContext will set updateOrgConfig and getCurrentOrgConfig on the returned context. */
+  orgFilePath?: string;
 }
 
 /**
@@ -96,11 +106,21 @@ export function createRunContext(
       ? createScopedCapabilityStore(currentCapabilityId, deps.capabilityStore)
       : undefined;
 
+  const daemonContext: Partial<RunContext> = {};
+  if (deps.orgFilePath != null && deps.orgFilePath !== "") {
+    daemonContext.updateOrgConfig = (config: OrgConfig) => {
+      deps.config = config;
+    };
+    daemonContext.getCurrentOrgConfig = () => deps.config;
+  }
+
   return {
     ...(deps.backbone && { backbone: deps.backbone }),
     invokeCapability,
     ...(capabilityStore && { capabilityStore }),
     ...(deps.metricsStore && { metricsStore: deps.metricsStore }),
     ...(agentLlm && { agentLlm }),
+    ...(deps.registry && { registry: deps.registry }),
+    ...daemonContext,
   };
 }

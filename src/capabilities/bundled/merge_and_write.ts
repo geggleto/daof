@@ -16,7 +16,7 @@ export function createMergeAndWriteInstance(
   return {
     async execute(
       input: CapabilityInput,
-      _runContext?: RunContext
+      runContext?: RunContext
     ): Promise<CapabilityOutput> {
       const orgPath = typeof input.org_path === "string" ? input.org_path : "";
       const generatedYaml = typeof input.generated_yaml === "string" ? input.generated_yaml : "";
@@ -24,12 +24,21 @@ export function createMergeAndWriteInstance(
         return { ok: false, error: "Missing org_path or generated_yaml" };
       }
       let config;
-      try {
-        const raw = loadYaml(orgPath);
-        config = validate(raw);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: `Failed to load/validate org: ${msg}` };
+      if (runContext?.getCurrentOrgConfig && runContext?.updateOrgConfig) {
+        try {
+          config = validate(runContext.getCurrentOrgConfig() as unknown as import("../../types/json.js").ParsedYaml);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, error: `Failed to validate current org config: ${msg}` };
+        }
+      } else {
+        try {
+          const raw = loadYaml(orgPath);
+          config = validate(raw);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, error: `Failed to load/validate org: ${msg}` };
+        }
       }
       const stripped = extractYamlFromMarkdown(generatedYaml);
       let parsed;
@@ -54,11 +63,15 @@ export function createMergeAndWriteInstance(
         const msg = err instanceof Error ? err.message : String(err);
         return { ok: false, error: `Validation failed after merge: ${msg}` };
       }
-      try {
-        writeOrgFile(orgPath, merged);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: `Failed to write org file: ${msg}` };
+      if (runContext?.updateOrgConfig) {
+        runContext.updateOrgConfig(merged);
+      } else {
+        try {
+          writeOrgFile(orgPath, merged);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, error: `Failed to write org file: ${msg}` };
+        }
       }
       const addedCount =
         Object.keys(generated.capabilities).length +

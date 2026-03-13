@@ -37,6 +37,24 @@ vi.mock("node:readline", () => ({
   },
 }));
 
+vi.mock("../src/registry/registry-store.js", () => {
+  const mockStore = {
+    upsertCapability: vi.fn().mockResolvedValue(undefined),
+    upsertAgent: vi.fn().mockResolvedValue(undefined),
+    queryByTags: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    queryByCategory: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    getCapability: vi.fn().mockResolvedValue(null),
+    getAgent: vi.fn().mockResolvedValue(null),
+    listAll: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    listStale: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    archiveStale: vi.fn().mockResolvedValue({ archived_capability_ids: [], archived_agent_ids: [] }),
+  };
+  return {
+    getRegistryMongoUri: vi.fn(() => "mongodb://localhost:27017"),
+    createRegistryStore: vi.fn(() => Promise.resolve(mockStore)),
+  };
+});
+
 const MINIMAL_ORG_YAML = `version: "1.0"
 org:
   name: Test
@@ -97,6 +115,7 @@ describe("daof build", () => {
       mockComplete
         .mockResolvedValueOnce({ text: "PRD: Add a summarizer skill.\n" })
         .mockResolvedValueOnce({ text: VALID_GENERATOR_YAML })
+        .mockResolvedValueOnce({ text: '{"duplicates": []}' })
         .mockResolvedValueOnce({ text: "PASS" });
 
       const result = await runBuild("add a skill that summarizes text", {
@@ -134,6 +153,7 @@ describe("daof build", () => {
       mockComplete
         .mockResolvedValueOnce({ text: "PRD: Add summarizer.\n" })
         .mockResolvedValueOnce({ text: VALID_GENERATOR_YAML })
+        .mockResolvedValueOnce({ text: '{"duplicates": []}' })
         .mockResolvedValueOnce({ text: "PASS" });
 
       const result = await runBuild("summarizer", {
@@ -151,6 +171,7 @@ describe("daof build", () => {
       mockComplete.mockResolvedValueOnce({ text: "PRD: Add summarizer.\n" });
       for (let i = 0; i < 5; i++) {
         mockComplete.mockResolvedValueOnce({ text: VALID_GENERATOR_YAML });
+        mockComplete.mockResolvedValueOnce({ text: '{"duplicates": []}' });
         mockComplete.mockResolvedValueOnce({ text: "FAIL" });
       }
 
@@ -170,8 +191,10 @@ describe("daof build", () => {
       const orgPath = createTempOrgDir();
       mockComplete.mockResolvedValueOnce({ text: "PRD: Add one capability.\n" });
       mockComplete.mockResolvedValueOnce({ text: VALID_GENERATOR_YAML });
+      mockComplete.mockResolvedValueOnce({ text: '{"duplicates": []}' });
       mockComplete.mockResolvedValueOnce({ text: "FAIL" });
       mockComplete.mockResolvedValueOnce({ text: VALID_GENERATOR_YAML });
+      mockComplete.mockResolvedValueOnce({ text: '{"duplicates": []}' });
       mockComplete.mockResolvedValueOnce({ text: "PASS" });
 
       const result = await runBuild("summarizer", {
@@ -181,7 +204,7 @@ describe("daof build", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockComplete).toHaveBeenCalledTimes(5); // 1 PRD + 2 attempts (gen+verify, gen+verify)
+      expect(mockComplete).toHaveBeenCalledTimes(7); // 1 PRD + 2 attempts (gen+similarity+verify each)
     });
   });
 
@@ -191,6 +214,7 @@ describe("daof build", () => {
       mockComplete
         .mockResolvedValueOnce({ text: "PRD: Add new_summarizer.\n" })
         .mockResolvedValueOnce({ text: VALID_GENERATOR_YAML })
+        .mockResolvedValueOnce({ text: '{"duplicates": []}' })
         .mockResolvedValueOnce({ text: "PASS" });
 
       const beforeContent = readFileSync(orgPath, "utf-8");
@@ -217,6 +241,7 @@ describe("daof build", () => {
       mockComplete
         .mockResolvedValueOnce({ text: "PRD: Add summarizer.\n" })
         .mockResolvedValueOnce({ text: VALID_GENERATOR_YAML })
+        .mockResolvedValueOnce({ text: '{"duplicates": []}' })
         .mockResolvedValueOnce({ text: "PASS" });
 
       await runBuild("summarizer", {
@@ -254,6 +279,7 @@ describe("daof build", () => {
       mockComplete
         .mockResolvedValueOnce({ text: "PRD: Add summarizer.\n" })
         .mockResolvedValueOnce({ text: VALID_GENERATOR_YAML })
+        .mockResolvedValueOnce({ text: '{"duplicates": []}' })
         .mockResolvedValueOnce({ text: "PASS" });
 
       const result = await runBuild("summarizer", {

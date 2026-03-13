@@ -1,10 +1,28 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { loadYaml, validate } from "../src/parser/index.js";
 import { bootstrap } from "../src/runtime/bootstrap.js";
 import { resolve } from "node:path";
 
-describe("org.example.yaml (readme canonical example)", () => {
-  const manifestPath = resolve(process.cwd(), "org.example.yaml");
+vi.mock("../src/registry/registry-store.js", () => {
+  const mockStore = {
+    upsertCapability: vi.fn().mockResolvedValue(undefined),
+    upsertAgent: vi.fn().mockResolvedValue(undefined),
+    queryByTags: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    queryByCategory: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    getCapability: vi.fn().mockResolvedValue(null),
+    getAgent: vi.fn().mockResolvedValue(null),
+    listAll: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    listStale: vi.fn().mockResolvedValue({ capability_ids: [], agent_ids: [] }),
+    archiveStale: vi.fn().mockResolvedValue({ archived_capability_ids: [], archived_agent_ids: [] }),
+  };
+  return {
+    getRegistryMongoUri: vi.fn(() => "mongodb://localhost:27017"),
+    createRegistryStore: vi.fn(() => Promise.resolve(mockStore)),
+  };
+});
+
+describe("org.yaml (canonical manifest)", () => {
+  const manifestPath = resolve(process.cwd(), "org.yaml");
 
   it("loads and validates without throwing", () => {
     const raw = loadYaml(manifestPath);
@@ -38,29 +56,27 @@ describe("org.example.yaml (readme canonical example)", () => {
     }
   });
 
-  it("bootstraps and ceo has provider and model", async () => {
+  it("bootstraps and planner has provider and model", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
     const runtime = await bootstrap(config);
-    const ceo = runtime.agents.get("ceo");
-    expect(ceo).toBeDefined();
-    if (!ceo) return;
-    expect(ceo.provider).toBe("cursor");
-    expect(ceo.model).toBe("auto");
+    const planner = runtime.agents.get("planner");
+    expect(planner).toBeDefined();
+    if (!planner) return;
+    expect(planner.provider).toBe("cursor");
+    expect(planner.model).toBe("auto");
   });
 
-  it("bootstraps and ceo.invoke('check_budget', {}) returns stub output", async () => {
+  it("bootstraps and application_engineer.invoke('logger', { message: 'hi' }) returns ok", async () => {
     const raw = loadYaml(manifestPath);
     const config = validate(raw);
     const runtime = await bootstrap(config);
     expect(runtime.agents.size).toBeGreaterThan(0);
     expect(runtime.capabilities.size).toBeGreaterThan(0);
-    const ceo = runtime.agents.get("ceo");
-    expect(ceo).toBeDefined();
-    if (!ceo) return;
-    const result = await ceo.invoke("check_budget", {});
+    const application_engineer = runtime.agents.get("application_engineer");
+    expect(application_engineer).toBeDefined();
+    if (!application_engineer) return;
+    const result = await application_engineer.invoke("logger", { message: "hi" });
     expect(result).toHaveProperty("ok", true);
-    expect(result).toHaveProperty("capabilityId", "check_budget");
-    expect(result).toHaveProperty("input");
   });
 });

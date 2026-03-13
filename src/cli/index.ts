@@ -9,6 +9,8 @@ import { fileURLToPath } from "url";
 import { ZodError } from "zod";
 import { Command } from "commander";
 import { loadYaml, validate, writeOrgFile } from "../parser/index.js";
+import { createRegistryStore, getRegistryMongoUri } from "../registry/registry-store.js";
+import type { RegistryMetadata } from "../registry/types.js";
 import { runBuild, runPlanner, runPlannerRevise } from "../build/index.js";
 import { createScaffoldOrgConfig, isENOENT } from "../build/scaffold.js";
 import { getProviderApiKey, getProviderService } from "../providers/registry.js";
@@ -105,6 +107,8 @@ runCmd.action(async (file: string) => {
         process.exit(1);
       }
     }
+
+    runtime.orgFilePath = file;
 
     const onBeforeShutdown = () => {
       if (process.env.DAOF_PID_FILE) removePidFile(process.env.DAOF_PID_FILE);
@@ -359,6 +363,87 @@ planCmd.action(async (descriptionArg: string) => {
     console.log("Unknown option. Choose r, e, s, or q.");
   }
 });
+
+const registryCmd = program
+  .command("registry")
+  .description("Skills/capabilities registry (MongoDB): sync org to registry, or query by metadata.");
+
+registryCmd
+  .command("sync")
+  .description("Load org manifest and upsert all capabilities (and agents) into the registry with metadata from YAML.")
+  .option("--file <path>", "Org manifest path (default: org.yaml)", "org.yaml")
+  .action(async function (this: import("commander").Command) {
+    const file = (this.opts() as { file?: string }).file ?? "org.yaml";
+    try {
+      const raw = loadYaml(file);
+      const config = validate(raw);
+      const uri = getRegistryMongoUri(config.registry?.mongo_uri);
+      const store = await createRegistryStore(uri);
+      let capCount = 0;
+      let agentCount = 0;
+      for (const [id, def] of Object.entries(config.capabilities)) {
+        if (typeof def !== "object" || def === null) continue;
+        const d = def as Record<string, unknown>;
+        const definition = { type: d.type, description: d.description, config: d.config } as Record<string, import("../types/json.js").JsonValue>;
+        const metadata: RegistryMetadata = {
+          tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
+          category: typeof d.category === "string" ? d.category : undefined,
+          intent: typeof d.intent === "string" ? d.intent : undefined,
+        };
+        await store.upsertCapability(id, definition, metadata, { source: "org", org_path: file });
+        capCount++;
+      }
+      for (const [id, def] of Object.entries(config.agents)) {
+        if (typeof def !== "object" || def === null) continue;
+        const d = def as Record<string, unknown>;
+        const definition = { provider: d.provider, model: d.model, role: d.role, description: d.description } as Record<string, import("../types/json.js").JsonValue>;
+        const metadata: RegistryMetadata & { role_category?: string } = {
+          tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
+          role_category: typeof d.role_category === "string" ? d.role_category : undefined,
+        };
+        await store.upsertAgent(id, definition, metadata, { source: "org", org_path: file });
+        agentCount++;
+      }
+      console.log(`Synced ${capCount} capabilities and ${agentCount} agents to registry.`);
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Registry sync failed:", message);
+      process.exit(1);
+    }
+  });
+
+registryCmd
+  .command("query")
+  .description("Query registry by tags or category; print matching capability and agent ids.")
+  .option("--tags <list>", "Comma-separated tags (e.g. image,http)")
+  .option("--category <name>", "Category name")
+  .action(async function (this: import("commander").Command) {
+    const opts = this.opts() as { tags?: string; category?: string };
+    try {
+      const uri = getRegistryMongoUri();
+      const store = await createRegistryStore(uri);
+      if (opts.tags) {
+        const tags = opts.tags.split(",").map((t) => t.trim()).filter(Boolean);
+        const result = await store.queryByTags(tags, { matchAll: false });
+        console.log("capability_ids:", result.capability_ids.join(", ") || "(none)");
+        console.log("agent_ids:", result.agent_ids.join(", ") || "(none)");
+      } else if (opts.category) {
+        const result = await store.queryByCategory(opts.category);
+        console.log("capability_ids:", result.capability_ids.join(", ") || "(none)");
+        console.log("agent_ids:", result.agent_ids.join(", ") || "(none)");
+      } else {
+        const result = await store.listAll();
+        console.log("capability_ids:", result.capability_ids.join(", ") || "(none)");
+        console.log("agent_ids:", result.agent_ids.join(", ") || "(none)");
+      }
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Registry query failed:", message);
+      process.exit(1);
+    }
+  });
 
 program
   .command("kill")

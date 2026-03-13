@@ -119,10 +119,14 @@ interface OrgRuntime {
   config: OrgConfig;
   capabilities: Map<string, CapabilityInstance>;
   agents: Map<string, Agent>;
+  /** When set, this process is the long-running daemon; config is synced to this path on shutdown. */
+  orgFilePath?: string;
   backbone?: BackboneAdapter;
   checkpointStore?: CheckpointStore;
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
+  /** Skills/capabilities registry (MongoDB). Set when registry config present and connection succeeds. */
+  registry?: RegistryStore;
   agentMiddleware?: AgentMiddleware[];
   capabilityMiddleware?: CapabilityMiddleware[];
 }
@@ -208,7 +212,7 @@ function runScheduler(
 ): Promise<void>;
 ```
 
-- `runScheduler` — starts heartbeat and event subscriber; uses `runtime.backbone?.createWorkflowSemaphore`/`createRunRegistry` when present (e.g. Redis), else in-memory semaphore and no run registry. Options: `onBeforeShutdown` (e.g. remove PID file). Resolves after setup; process stays alive until SIGINT/SIGTERM.
+- `runScheduler` — starts heartbeat and event subscriber; uses `runtime.backbone?.createWorkflowSemaphore`/`createRunRegistry` when present (e.g. Redis), else in-memory semaphore and no run registry. Options: `onBeforeShutdown` (e.g. remove PID file). When `runtime.orgFilePath` is set, shutdown writes `runtime.config` to that path before calling `onBeforeShutdown` and exiting; on write failure logs and exits with code 1. Resolves after setup; process stays alive until SIGINT/SIGTERM.
 
 ---
 
@@ -230,6 +234,12 @@ interface RunContext {
   metricsStore?: CapabilityStore;
   /** Current agent's provider/model/API key for LLM calls; passed from executor, inherited in nested invocations. */
   agentLlm?: AgentLlm;
+  /** When present, skills/capabilities registry for metadata search (query_capability_registry, etc.). */
+  registry?: RegistryStore;
+  /** When present (daemon mode), capabilities should call this to replace the in-memory org config instead of writing to disk. */
+  updateOrgConfig?: (config: OrgConfig) => void;
+  /** When present (daemon mode), capabilities use this as the current config for merge/patch so the base is in-memory state. */
+  getCurrentOrgConfig?: () => OrgConfig;
 }
 
 interface RunContextFactoryDeps {
@@ -238,7 +248,10 @@ interface RunContextFactoryDeps {
   backbone?: BackboneAdapter;
   capabilityStore?: CapabilityStore;
   metricsStore?: CapabilityStore;
+  registry?: RegistryStore;
   capabilityMiddleware?: CapabilityMiddleware[];
+  /** When set (daemon mode), createRunContext sets updateOrgConfig and getCurrentOrgConfig on the returned context. */
+  orgFilePath?: string;
 }
 ```
 

@@ -5,6 +5,13 @@ org:
   goals:
     - generate_agents_capabilities_and_workflows
 agents:
+  overseer:
+    provider: cursor
+    model: auto
+    role: Overseer
+    description: Oversees the organization and its agents. Generates agents, capabilities, and workflows from a description.
+    capabilities:
+      - name: generate_agents_capabilities_and_workflows
   planner:
     provider: cursor
     model: auto
@@ -58,7 +65,18 @@ agents:
     capabilities:
       - name: application_code_writer
       - name: logger
+  curator:
+    provider: cursor
+    model: auto
+    role: Registry Curator
+    description: Prunes stale capability/skill entries from the registry (archives
+      by last_accessed). Run via registry_curation workflow.
+    capabilities:
+      - name: prune_registry
 capabilities:
+  prune_registry:
+    type: tool
+    description: Prune stale registry entries (archive by last_accessed). Used by Curator.
   logger:
     type: tool
     description: Log messages (bundled; console in v1)
@@ -67,107 +85,10 @@ capabilities:
     description: Publish events to backbone queue (bundled)
     config:
       queue: events
-  webhook_notifier:
-    type: tool
-    description: HTTP POST to a webhook URL (bundled)
   key_value_store:
     type: tool
     description: Get/set/delete by key (bundled; Redis or in-memory)
-  image_generator:
-    type: tool
-    description: Generate images via HTTP/Hugging Face endpoint (bundled)
-    config:
-      endpoint: https://your-flux-endpoint.hf.space
-      api_key: env(HF_API_KEY)
-      default_batch_size: 5
-      max_batch_size: 20
     persistence: sql_events
-  text_generator:
-    type: tool
-    description: Generate text via LLM endpoint (bundled)
-    config:
-      endpoint: https://api.example.com/complete
-      api_key: env(LLM_API_KEY)
-  sentiment_analyzer:
-    type: tool
-    description: Sentiment score via endpoint (bundled)
-    config:
-      endpoint: https://api.example.com/sentiment
-      api_key: env(SENTIMENT_API_KEY)
-  x_poster:
-    type: tool
-    description: Post to X via Twitter API v2 SDK (bundled; stub when credentials omitted)
-    config:
-      app_key: env(TWITTER_APP_KEY)
-      app_secret: env(TWITTER_APP_SECRET)
-      access_token: env(TWITTER_ACCESS_TOKEN)
-      access_token_secret: env(TWITTER_ACCESS_TOKEN_SECRET)
-  metrics_fetcher:
-    type: tool
-    description: Fetch X/GA4 metrics (bundled; get X metrics)
-    config:
-      endpoint: https://api.twitter.com/2/tweets
-      api_key: env(X_API_KEY)
-  file_uploader:
-    type: tool
-    description: Upload file to local or S3 (bundled; S3 stub)
-    config:
-      base_path: ./uploads
-  gitactor_scanner:
-    type: tool
-    description: Security & quality scan using gitactor.dev
-    config:
-      endpoint: http://localhost:3000/scan
-      api_key: env(GITACTOR_API_KEY)
-      default_mode: full
-      auto_reject_threshold: 60
-    persistence: sql_events
-  check_budget:
-    type: tool
-    description: Check budget status
-  alert_board:
-    type: tool
-    description: Alert board
-  generate_strategy:
-    type: tool
-    description: Generate content strategy
-  text_formatter:
-    type: tool
-    description: Format text
-  video_gen_short:
-    type: tool
-    description: Generate short video
-  upsert_metric:
-    type: tool
-    description: Upsert metric
-  generate_report:
-    type: tool
-    description: Generate report
-  schedule_post:
-    type: tool
-    description: Schedule post
-  write_post:
-    type: tool
-    description: Write post
-    depends_on:
-      - text_formatter
-  generate_assets:
-    type: tool
-    description: Generate assets
-  review_assets:
-    type: tool
-    description: Review assets
-  final_compliance_check:
-    type: tool
-    description: Final compliance check
-  assemble_and_post:
-    type: tool
-    description: Assemble and post
-    depends_on:
-      - x_poster
-  collect_metrics:
-    type: tool
-    description: Collect metrics
   produce_prd:
     type: tool
     description: Planner; produce PRD from description (bundled)
@@ -185,6 +106,9 @@ capabilities:
     description: Publish build result to build.replies queue (bundled)
     config:
       queue: build.replies
+  generate_agents_capabilities_and_workflows:
+    type: tool
+    description: Overseer; generates agents, capabilities, and workflows from a description (bundled stub).
   frontend_code_writer:
     type: skill
     description: Accepts a task description (and optional tech stack, constraints,
@@ -460,6 +384,15 @@ workflows:
     steps:
       - agent: data_analyst
         action: collect_metrics
+  registry_curation:
+    trigger: cron(0 3 * * 0)
+    description: Weekly prune of stale registry entries; Curator archives capabilities/agents
+      not accessed within older_than_days (default 90).
+    steps:
+      - agent: curator
+        action: prune_registry
+        params:
+          older_than_days: 90
   build_on_request:
     trigger: event(build.requested)
     description: "Self-upgrade; run Planner, Generator, merge, Verifier, reply.

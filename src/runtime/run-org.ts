@@ -3,6 +3,7 @@ import {
   DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
   DEFAULT_MAX_CONCURRENT_WORKFLOWS,
 } from "../schema/index.js";
+import { writeOrgFile } from "../parser/index.js";
 import { startHeartbeat, onHeartbeatRunDueWorkflows, startEventSubscriber } from "../workflow/scheduler.js";
 import { createInMemoryWorkflowSemaphore } from "../backbone/semaphore.js";
 
@@ -41,8 +42,17 @@ export async function runScheduler(
   const shutdown = () => {
     stopHeartbeat();
     stopEventSubscriber();
+    let syncFailed = false;
+    if (runtime.orgFilePath) {
+      try {
+        writeOrgFile(runtime.orgFilePath, runtime.config);
+      } catch (err) {
+        syncFailed = true;
+        console.error("[daof] Failed to sync org config to file on shutdown:", err instanceof Error ? err.message : err);
+      }
+    }
     options?.onBeforeShutdown?.();
-    process.exit(0);
+    process.exit(syncFailed ? 1 : 0);
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

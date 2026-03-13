@@ -1,13 +1,15 @@
-# Local Redis for DAOF (backbone). No auth — for local development only.
+# Local Redis (backbone) and MongoDB (skills/capabilities registry). No auth — for local development only.
 # Start: docker compose up -d
 # Stop:  docker compose down
 #
-# For production or hosted Redis (Upstash, Redis Cloud, etc.), set the backbone
-# URL in your org manifest (e.g. env-resolved or direct URL) instead of using this.
+# For production: set backbone URL and REGISTRY_MONGO_URI in env or org manifest.
 
 services:
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    # No command = default Redis, no password (suitable for local)
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
