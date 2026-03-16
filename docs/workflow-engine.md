@@ -104,7 +104,7 @@ function runWorkflow(
 
 - **runtime:** Bootstrapped org (config, agents, capabilities). Each agent in the manifest has **provider** and **model** (e.g. `provider: cursor`, `model: auto`); providers are defined in code (Cursor only for MVP), and the provider’s API key is read from the environment (e.g. `CURSOR_API_KEY`). When backbone is connected, step execution receives a **RunContext** (e.g. `{ backbone: runtime.backbone, agentLlm }`) so agents/capabilities can publish in realtime and use the agent’s LLM config.
 - **workflowId:** Key in `runtime.config.workflows`. Throws if missing.
-- **initialInput (optional):** Merged into initial context as `__initial` when non-empty. When running under the scheduler, `__event_id` (and optionally `__run_id`) are passed for traceability. **One-shot (CLI):** You can pass initial input with `--input`: e.g. `daof run org.yaml --workflow my_workflow --input '{"topic":"sales","limit":10}'`. Step params can reference these as `{{ __initial.topic }}`, `{{ __initial.limit }}`, etc.
+- **initialInput (optional):** Merged into initial context as `__initial` when non-empty. Every run gets an auto-generated **run ID** (UUID); it is always set as `__initial.__run_id`, so step params can use `{{ __initial.__run_id }}` without passing it in `--input`. When running under the scheduler, `__event_id` is also passed for traceability. **One-shot (CLI):** You can pass additional input with `--input`: e.g. `daof run org.yaml --workflow my_workflow --input '{"topic":"sales","limit":10}'`. Step params can reference these as `{{ __initial.topic }}`, `{{ __initial.limit }}`, `{{ __initial.__run_id }}`, etc.
 - **options.runRegistry (optional):** When set (scheduler mode), the run is registered for cancellation; the runner checks a cancel flag between steps and unregisters on exit.
 - **Returns:** `{ success, context, error? }`. On step throw: `success === false`, `error` set, `context` is the context up to the failing step.
 
@@ -112,7 +112,7 @@ function runWorkflow(
 
 **Circuit breaker (optional):** `runWorkflow(..., options?: { circuitBreaker })`. When provided, the full graph invoke runs through the breaker; after a threshold of failures (e.g. 5) the circuit opens and the run fails. The CLI uses this and exits gracefully (exit 1) when the circuit is open. See [src/fault/circuit-breaker.ts](src/fault/circuit-breaker.ts) and [docs/verification.md](verification.md).
 
-When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm, runInfo)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.1 Capabilities calling other capabilities](#61-capabilities-calling-other-capabilities)), and when the runtime has a ticket store and runInfo (workflow run), **ticket** `{ id, append(update) }` so capabilities can append observability updates to the run ticket. See [docs/tickets.md](tickets.md).
+When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm, runInfo)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.2 Capabilities calling other capabilities](#62-capabilities-calling-other-capabilities)), and when the runtime has a ticket store and runInfo (workflow run), **ticket** `{ id, append(update) }` so capabilities can append observability updates to the run ticket. See [docs/tickets.md](tickets.md).
 
 **MongoDB is required** for running workflows: the runtime creates both the registry store and the ticket store at bootstrap; connection failure throws.
 
@@ -149,7 +149,31 @@ Example: `"{{ visual_qa.verdict }} && {{ compliance_qa.verdict }}"` — both pat
 - **Parallel step:** `parallel: [ ...SequentialStep ]`. Run all via `Promise.all` with the same incoming context; merge outputs by agent id into one context (same key rules as above).
 - **Failure:** On throw, the workflow returns `{ success: false, context, error }`; no retries or fallback in this phase.
 
-### 6.1. Capabilities calling other capabilities
+### 6.1. Parallel then sequential
+
+You can run multiple agents in parallel and then run another step. Use one workflow step with `parallel` (each branch is a full sequential step with `agent`, `action`, optional `params`/`condition`); the next step in the `steps` array runs after all parallel branches complete. Downstream steps see each branch’s output under that branch’s agent id.
+
+Example (minimal):
+
+```yaml
+steps:
+  - parallel:
+      - agent: worker_a
+        action: do_work
+        params: { input: "{{ __initial.data }}" }
+      - agent: worker_b
+        action: do_work
+        params: { input: "{{ __initial.data }}" }
+  - agent: aggregator
+    action: merge_results
+    params:
+      result_a: "{{ worker_a.text }}"
+      result_b: "{{ worker_b.text }}"
+```
+
+Constraints: no nested `parallel` in v1; if two branches use the same agent id, last write wins in the merged context.
+
+### 6.2. Capabilities calling other capabilities
 
 Each capability receives a **RunContext** that may include **invokeCapability(capabilityId, input)** and **agentLlm** (the current agent’s provider, model, and API key for LLM calls). This allows a capability to call another capability at runtime and to use the agent’s LLM config when it needs to talk to the model. Allowed targets are declared in the manifest under that capability’s **depends_on** (array of capability ids). Only capabilities listed in the current capability’s **depends_on** may be invoked; calling a capability not in the list throws (e.g. `Capability "X" may not invoke "Y" (not in depends_on).`). Nested invocations get their own scoped RunContext (the callee can only call its own **depends_on**).
 

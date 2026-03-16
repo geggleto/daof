@@ -6,7 +6,7 @@ org:
     - Identify vulnerabilities in game code via ensemble LLM analysis.
     - Achieve consensus on findings for reliable reports.
 agents:
-  dispatcher:
+  security_auditor:
     provider: cursor
     model: auto
     role: "Dispatches prompts to multiple models and collects initial findings."
@@ -34,6 +34,7 @@ capabilities:
 
       Context:
         - TARGET SOURCE CODE IS LOCATED AT: {{ target_code_path }}
+        - THE FINDINGS ARE LOCATED AT: {{ target_code_path }}/findings
         - RUN ID: {{ run_id }}
         - You are aggregating findings from {{ num_audits }} independent audits (e.g., from different models or auditors).
         - Input: A collection of individual audit reports in Markdown format, each following the structure: # Security Audit..., Executive Summary, Findings Overview (table), Detailed Findings, Appendix.
@@ -239,16 +240,27 @@ workflows:
   full_audit:
     trigger: on-demand
     steps:
-      - agent: dispatcher
-        action: prompt_model
-        params:
-          target_code_path: "{{ __initial.target_code_path }}"
-          run_id: "{{ __initial.run_id }}"
+      - parallel:
+          - agent: security_auditor
+            action: prompt_model
+            params:
+              target_code_path: "{{ __initial.target_code_path }}"
+              run_id: "{{ __initial.__run_id }}"
+          - agent: security_auditor
+            action: prompt_model
+            params:
+              target_code_path: "{{ __initial.target_code_path }}"
+              run_id: "{{ __initial.__run_id }}"
+          - agent: security_auditor
+            action: prompt_model
+            params:
+              target_code_path: "{{ __initial.target_code_path }}"
+              run_id: "{{ __initial.__run_id }}"
       - agent: aggregator
         action: aggregate_findings
         params:
           target_code_path: "{{ __initial.target_code_path }}"
-          run_id: "{{ __initial.run_id }}"
+          run_id: "{{ __initial.__run_id }}"
 backbone:
   type: redis
   config:
