@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput, JsonValue } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
+import { getProviderService } from "../../providers/registry.js";
 
 const TEMPLATE_REGEX = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}/g;
 
@@ -81,7 +82,16 @@ export function createSkillRunnerInstance(
         }
       }
 
-      return { text: renderedPrompt };
+      const agentLlm = runContext?.agentLlm;
+      const providerId = agentLlm?.provider;
+      const apiKey = agentLlm?.apiKey;
+      const service = getProviderService(providerId ?? "", apiKey);
+      if (!service) {
+        return { ok: false, error: "Skill has no config.endpoint and no runContext.agentLlm (provider with API key) available." };
+      }
+      return service.complete(renderedPrompt, {
+        model: agentLlm?.model ?? "auto",
+      });
     },
   };
 }

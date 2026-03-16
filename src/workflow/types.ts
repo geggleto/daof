@@ -23,7 +23,11 @@ export interface EventTrigger {
   eventName: string;
 }
 
-export type ParsedTrigger = CronTrigger | EventTrigger;
+export interface OnDemandTrigger {
+  type: "on_demand";
+}
+
+export type ParsedTrigger = CronTrigger | EventTrigger | OnDemandTrigger;
 
 /** Thrown when a workflow run is cancelled via daof kill <run_id>. */
 export class WorkflowCancelledError extends Error {

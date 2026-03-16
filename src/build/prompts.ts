@@ -52,7 +52,7 @@ agents:
     capabilities: [{ name: "<capability_id>" }]
 workflows:
   <id>:
-    trigger: cron(* * * * *) or event(name)
+    trigger: cron(* * * * *), event(name), or on-demand
     steps: [...]
 
 Generate in order: capabilities first (so agents can reference them), then agents, then workflows (so workflows reference existing agents and actions).`;

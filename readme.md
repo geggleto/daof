@@ -36,6 +36,8 @@ Or in a project: `npm install daof` and run via `npx daof` or `node_modules/.bin
 
 ### 2. Environment
 
+The CLI loads `.env` and `.env.local` from the current working directory (via dotenv). Set `CURSOR_API_KEY`, `REGISTRY_MONGO_URI`, etc. there, or export them in the shell.
+
 - **Cursor (LLM):** `CURSOR_API_KEY` for plan, build, and agent steps.
 - **Redis:** Used by the scheduler and event workflows. Set in the org manifest (e.g. `backbone.config.url: redis://localhost:6379`) or use a hosted Redis URL.
 - **Registry (optional):** `REGISTRY_MONGO_URI` or `MONGO_URI` (or `registry.mongo_uri` in the manifest) for the skills/capabilities registry.

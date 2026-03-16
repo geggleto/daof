@@ -128,3 +128,5 @@ certificates
 allocation-*.csv
 
 service-acccount.json
+
+findings/

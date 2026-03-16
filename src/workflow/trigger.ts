@@ -28,11 +28,17 @@ function parseEvent(trigger: string): ParsedTrigger | null {
   return null;
 }
 
+function parseOnDemand(trigger: string): ParsedTrigger | null {
+  if (trigger === "on-demand") return { type: "on_demand" };
+  return null;
+}
+
 registerTriggerParser(parseCron);
 registerTriggerParser(parseEvent);
+registerTriggerParser(parseOnDemand);
 
 /**
- * Parse workflow trigger string into CronTrigger or EventTrigger.
+ * Parse workflow trigger string into CronTrigger, EventTrigger, or OnDemandTrigger.
  * Uses registered parsers; add new formats via registerTriggerParser.
  */
 export function parseTrigger(trigger: string): ParsedTrigger {

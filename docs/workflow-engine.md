@@ -65,10 +65,10 @@ Defined in `src/types/json.ts`. Used for step params and for values in `Workflow
 
 ## 2. Trigger types (parsed from manifest)
 
-Workflows have `trigger: string` in the manifest (e.g. `cron(0 9 * * *)` or `event(strategy_ready)`). The engine **parses** these. When running the org (scheduler mode), **cron**-triggered workflows are run on the heartbeat when due; **event**-triggered workflows are run when the scheduler subscribes to the backbone events queue and receives a message whose `event_type` matches the workflow’s `event(eventName)`. The event message is expected to be JSON with `event_type` and optional `payload`; the workflow is run with `initialInput = { ...payload, __event_id }`, so step params can reference `{{ __initial.<key> }}` (e.g. `{{ __initial.url }}`, `{{ __initial.post_id }}`).
+Workflows have `trigger: string` in the manifest (e.g. `cron(0 9 * * *)`, `event(strategy_ready)`, or `on-demand`). The engine **parses** these. When running the org (scheduler mode), **cron**-triggered workflows are run on the heartbeat when due; **event**-triggered workflows are run when the scheduler subscribes to the backbone events queue and receives a message whose `event_type` matches the workflow’s `event(eventName)`. **On-demand** workflows are not run by the scheduler; they run only when explicitly invoked (one-shot `daof run --workflow <name>` or programmatic `runWorkflow`). The event message is expected to be JSON with `event_type` and optional `payload`; the workflow is run with `initialInput = { ...payload, __event_id }`, so step params can reference `{{ __initial.<key> }}` (e.g. `{{ __initial.url }}`, `{{ __initial.post_id }}`).
 
 ```ts
-type ParsedTrigger = CronTrigger | EventTrigger;
+type ParsedTrigger = CronTrigger | EventTrigger | OnDemandTrigger;
 
 interface CronTrigger {
   type: "cron";
@@ -79,10 +79,14 @@ interface EventTrigger {
   type: "event";
   eventName: string;    // e.g. "strategy_ready"
 }
+
+interface OnDemandTrigger {
+  type: "on_demand";    // run only when invoked (CLI or API)
+}
 ```
 
 - **Parse:** `parseTrigger(trigger: string): ParsedTrigger` in `src/workflow/trigger.ts`.
-- **Formats:** `cron(<expression>)`, `event(<eventName>)`. Unsupported strings throw.
+- **Formats:** `cron(<expression>)`, `event(<eventName>)`, `on-demand`. Unsupported strings throw.
 
 ---
 
@@ -100,7 +104,7 @@ function runWorkflow(
 
 - **runtime:** Bootstrapped org (config, agents, capabilities). Each agent in the manifest has **provider** and **model** (e.g. `provider: cursor`, `model: auto`); providers are defined in code (Cursor only for MVP), and the provider’s API key is read from the environment (e.g. `CURSOR_API_KEY`). When backbone is connected, step execution receives a **RunContext** (e.g. `{ backbone: runtime.backbone, agentLlm }`) so agents/capabilities can publish in realtime and use the agent’s LLM config.
 - **workflowId:** Key in `runtime.config.workflows`. Throws if missing.
-- **initialInput (optional):** Merged into initial context as `__initial` when non-empty. When running under the scheduler, `__event_id` (and optionally `__run_id`) are passed for traceability.
+- **initialInput (optional):** Merged into initial context as `__initial` when non-empty. When running under the scheduler, `__event_id` (and optionally `__run_id`) are passed for traceability. **One-shot (CLI):** You can pass initial input with `--input`: e.g. `daof run org.yaml --workflow my_workflow --input '{"topic":"sales","limit":10}'`. Step params can reference these as `{{ __initial.topic }}`, `{{ __initial.limit }}`, etc.
 - **options.runRegistry (optional):** When set (scheduler mode), the run is registered for cancellation; the runner checks a cancel flag between steps and unregisters on exit.
 - **Returns:** `{ success, context, error? }`. On step throw: `success === false`, `error` set, `context` is the context up to the failing step.
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import "./load-env.js";
 import * as readline from "node:readline";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import "../providers/register-providers.js";
 import "../backbone/register-backbones.js";
@@ -16,6 +17,7 @@ import { runBuild, runPlanner, runPlannerRevise } from "../build/index.js";
 import { createScaffoldOrgConfig, isENOENT } from "../build/scaffold.js";
 import { getProviderApiKey, getProviderService } from "../providers/registry.js";
 import { bootstrap, connectBackbone } from "../runtime/bootstrap.js";
+import type { CapabilityInput } from "../types/json.js";
 import { runWorkflow } from "../workflow/executor.js";
 import { runScheduler } from "../runtime/run-org.js";
 import { createBackbone } from "../backbone/factory.js";
@@ -26,6 +28,7 @@ import {
   writePidFile,
   removePidFile,
 } from "./pidfile.js";
+import ora from "ora";
 
 const program = new Command();
 
@@ -56,17 +59,50 @@ program
     }
   });
 
+const initCmd = program
+  .command("init")
+  .description("Create a new minimal org manifest YAML file.")
+  .argument("[file]", "Path to output org manifest (default: org.yaml)", "org.yaml")
+  .option("--name <string>", "Org name in the generated manifest")
+  .option("--force", "Overwrite existing file")
+  .action((file: string) => {
+    const opts = initCmd.opts() as { name?: string; force?: boolean };
+    const filePath = file ?? "org.yaml";
+    if (existsSync(filePath) && !opts.force) {
+      console.error(`File already exists: ${filePath}. Use --force to overwrite.`);
+      process.exit(1);
+    }
+    try {
+      const config = createScaffoldOrgConfig();
+      if (opts.name) {
+        config.org.name = opts.name;
+        config.org.description = "Org created by daof init";
+      }
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeOrgFile(filePath, config);
+      console.log(`Created org manifest at ${filePath}.`);
+      process.exit(0);
+    } catch (err) {
+      console.error("Init failed:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
 const runCmd = program
   .command("run")
   .description("Load, validate, bootstrap, and run one workflow or run the org (scheduler)")
   .argument("<file>", "Path to the org manifest YAML file")
   .option("--workflow <name>", "Workflow to run (one-shot). Omit to run the org (heartbeat + cron workflows).")
+  .option("--input <json>", "JSON object for workflow initial input (use with --workflow); keys available as {{ __initial.key }} in step params")
+  .option("--timeout <ms>", "Timeout for one-shot workflow in milliseconds (default: 600000 = 10 min)")
   .option("-d, --detach", "Run in background (only when not using --workflow)")
   .option("--pid-file <path>", "PID file path when using -d (default: daof.pid in cwd)")
   .option("-v, --verbose", "Increase verbosity; use -vvv to print workflow output JSON", (v: string, prev: number) => prev + 1, 0);
 
+const DEFAULT_RUN_TIMEOUT_MS = 600_000; // 10 minutes
+
 runCmd.action(async (file: string) => {
-  const opts = runCmd.opts() as { workflow?: string; detach?: boolean; pidFile?: string; verbose?: number };
+  const opts = runCmd.opts() as { workflow?: string; input?: string; timeout?: string; detach?: boolean; pidFile?: string; verbose?: number };
   if (opts.detach && opts.workflow) {
     console.error("-d is only valid when running the org without --workflow.");
     process.exit(1);
@@ -81,13 +117,42 @@ runCmd.action(async (file: string) => {
 
     if (opts.workflow) {
       const workflowId = opts.workflow;
+      let initialInput: CapabilityInput | undefined;
+      if (opts.input) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(opts.input);
+        } catch {
+          console.error("run --input must be valid JSON (e.g. {\"key\":\"value\"}).");
+          process.exit(1);
+        }
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          console.error("run --input must be a JSON object.");
+          process.exit(1);
+        }
+        initialInput = parsed as CapabilityInput;
+      }
+      const timeoutMs =
+        opts.timeout != null && opts.timeout !== ""
+          ? parseInt(opts.timeout, 10)
+          : DEFAULT_RUN_TIMEOUT_MS;
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 1) {
+        console.error("run --timeout must be a positive number (milliseconds).");
+        process.exit(1);
+      }
       const circuitBreaker = createAppCircuitBreaker({
         failureThreshold: 5,
-        timeoutMs: 120_000,
+        timeoutMs,
       });
-      const result = await runWorkflow(runtime, workflowId, undefined, {
-        circuitBreaker,
-      });
+      const spinner = ora(`Running workflow '${workflowId}'…`).start();
+      let result;
+      try {
+        result = await runWorkflow(runtime, workflowId, initialInput, {
+          circuitBreaker,
+        });
+      } finally {
+        spinner.stop();
+      }
       if (result.success) {
         console.log(`Workflow '${workflowId}' completed. Success: true.`);
         if (result.runId) {

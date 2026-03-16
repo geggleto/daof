@@ -22,6 +22,11 @@ describe("parseTrigger", () => {
     expect(result).toEqual({ type: "event", eventName: "strategy_ready" });
   });
 
+  it("parses on-demand to OnDemandTrigger", () => {
+    const result = parseTrigger("on-demand");
+    expect(result).toEqual({ type: "on_demand" });
+  });
+
   it("throws for unsupported trigger format", () => {
     expect(() => parseTrigger("manual")).toThrow("Unsupported trigger format");
     expect(() => parseTrigger("")).toThrow("Unsupported trigger format");

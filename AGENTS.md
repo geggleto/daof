@@ -25,7 +25,7 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 | `src/build/` | Build flow: Planner (PRD), review, Generator, merge into org, Verifier. Uses org-level planner/generator/builder/verifier agents when present; supports `--via-events` (build.requested / build.replies). |
 | `docs/` | Human and agent documentation. |
 
-**MongoDB is required** for running workflows: bootstrap connects to Mongo for the registry (skills/capabilities) and the ticket store. Configure `registry.mongo_uri` in the manifest or set `REGISTRY_MONGO_URI` / `MONGO_URI` (default `mongodb://localhost:27017`).
+**MongoDB is required** for running workflows: bootstrap connects to Mongo for the registry (skills/capabilities) and the ticket store. Configure `registry.mongo_uri` in the manifest or set `REGISTRY_MONGO_URI` / `MONGO_URI` (default `mongodb://localhost:27017`). The CLI loads `.env` and `.env.local` from the current working directory (via dotenv); set `CURSOR_API_KEY`, `REGISTRY_MONGO_URI`, etc. there.
 
 ## Key entry points
 
