@@ -244,6 +244,12 @@ interface RunContext {
   getCurrentOrgConfig?: () => OrgConfig;
   /** When present (workflow run), capabilities can append updates to the run ticket (observability). */
   ticket?: { id: string; append(update: Omit<TicketUpdate, "at">): Promise<void> };
+  /** When present (workflow step), unique ID for this step execution (one per sequential step, including each parallel branch). */
+  stepId?: string;
+  /** When present (workflow run), the workflow run ID. Available even when ticket store is not set. */
+  runId?: string;
+  /** When present (workflow step), the id of the agent executing the current step (e.g. security_auditor). */
+  agentId?: string;
 }
 
 interface RunInfo {
@@ -272,7 +278,10 @@ function createRunContext(
   deps: RunContextFactoryDeps,
   currentCapabilityId: string,
   agentLlm?: AgentLlm,
-  runInfo?: RunInfo
+  runInfo?: RunInfo,
+  stepId?: string,
+  runId?: string,
+  agentId?: string
 ): RunContext;
 ```
 

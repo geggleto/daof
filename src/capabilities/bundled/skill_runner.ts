@@ -51,7 +51,13 @@ export function createSkillRunnerInstance(
       input: CapabilityInput,
       runContext?: import("../../runtime/run-context.js").RunContext
     ): Promise<CapabilityOutput> {
-      const renderedPrompt = resolvePromptTemplate(promptTemplate, input);
+      const reserved: Record<string, JsonValue> = {};
+      if (runContext?.stepId != null) reserved.step_id = runContext.stepId;
+      const runId = runContext?.runId ?? runContext?.ticket?.id;
+      if (runId != null) reserved.run_id = runId;
+      if (runContext?.agentId != null) reserved.agent_id = runContext.agentId;
+      const effectiveInput: CapabilityInput = { ...input, ...reserved };
+      const renderedPrompt = resolvePromptTemplate(promptTemplate, effectiveInput);
 
       if (endpoint) {
         const headers: Record<string, string> = {

@@ -108,7 +108,7 @@ describe("executeStep", () => {
 });
 
 describe("executeParallelStep", () => {
-  it("runs both steps and merges outputs by agent id", async () => {
+  it("runs both steps and merges outputs by agentId_index and exposes __parallel_step_ids", async () => {
     const runtime = createMockRuntime(
       new Map([
         [
@@ -141,10 +141,13 @@ describe("executeParallelStep", () => {
     };
     const context = {};
     const next = await executeParallelStep(runtime, step, context);
-    expect(next).toHaveProperty("alpha");
-    expect(next).toHaveProperty("beta");
-    expect(next.alpha).toMatchObject({ capabilityId: "do_one" });
-    expect(next.beta).toMatchObject({ capabilityId: "do_two" });
+    expect(next).toHaveProperty("alpha_0");
+    expect(next).toHaveProperty("beta_1");
+    expect(next.alpha_0).toMatchObject({ capabilityId: "do_one" });
+    expect(next.beta_1).toMatchObject({ capabilityId: "do_two" });
+    expect(next).toHaveProperty("__parallel_step_ids");
+    expect(Array.isArray((next as Record<string, unknown>).__parallel_step_ids)).toBe(true);
+    expect((next as Record<string, unknown>).__parallel_step_ids).toHaveLength(2);
   });
 });
 

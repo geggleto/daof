@@ -51,6 +51,12 @@ export interface RunContext {
     id: string;
     append(update: Omit<TicketUpdate, "at">): Promise<void>;
   };
+  /** When present (workflow step), unique ID for this step execution (one per sequential step, including each parallel branch). */
+  stepId?: string;
+  /** When present (workflow run), the workflow run ID. Available even when ticket store is not set. */
+  runId?: string;
+  /** When present (workflow step), the id of the agent executing the current step (e.g. security_auditor). */
+  agentId?: string;
 }
 
 /**
@@ -78,12 +84,16 @@ export interface RunInfo {
  * Build a RunContext for the given capability. InvokeCapability is scoped to that
  * capability's depends_on; nested invocations get their own RunContext and inherit agentLlm when provided.
  * When runInfo and ticketStore are present, context.ticket allows appending updates to the run ticket.
+ * When stepId/runId/agentId are provided (workflow executor), capabilities can use them for step/run/agent-scoped identifiers.
  */
 export function createRunContext(
   deps: RunContextFactoryDeps,
   currentCapabilityId: string,
   agentLlm?: AgentLlm,
-  runInfo?: RunInfo
+  runInfo?: RunInfo,
+  stepId?: string,
+  runId?: string,
+  agentId?: string
 ): RunContext {
   const def = deps.config.capabilities[currentCapabilityId];
   const allowed = def?.depends_on ?? [];
@@ -101,7 +111,7 @@ export function createRunContext(
     if (!target) {
       throw new Error(`Capability not found: ${capabilityId}`);
     }
-    const nestedRunContext = createRunContext(deps, capabilityId, agentLlm, runInfo);
+    const nestedRunContext = createRunContext(deps, capabilityId, agentLlm, runInfo, undefined, runId, agentId);
     const hasCapabilityMiddleware = deps.capabilityMiddleware && deps.capabilityMiddleware.length > 0;
     if (hasCapabilityMiddleware && deps.capabilityMiddleware) {
       return executeCapabilityWithMiddleware(
@@ -147,5 +157,8 @@ export function createRunContext(
     ...(deps.registry && { registry: deps.registry }),
     ...daemonContext,
     ...ticketContext,
+    ...(stepId != null && stepId !== "" && { stepId }),
+    ...(runId != null && runId !== "" && { runId }),
+    ...(agentId != null && agentId !== "" && { agentId }),
   };
 }

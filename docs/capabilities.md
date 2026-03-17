@@ -104,7 +104,7 @@ The **x_poster** capability uses the [twitter-api-v2](https://www.npmjs.com/pack
 When a capability has **type: "skill"** and no bundled implementation by id, the loader instantiates a **skill runner** that:
 
 - Reads **prompt** from the manifest (template string).
-- Resolves `{{ key }}` and `{{ key.nested }}` from the capability **input**.
+- Resolves `{{ key }}` and `{{ key.nested }}` from the capability **input**. When the skill runs in a workflow step, the runner also injects reserved placeholders from the run context (runContext values override input): **`{{ step_id }}`** (current step UUID), **`{{ run_id }}`** (workflow run ID), and **`{{ agent_id }}`** (id of the agent executing the step). So prompts can use these without passing them in params.
 - If **config.endpoint** is set, POSTs the rendered prompt to that endpoint (same request shape and auth as TextGenerator) and returns `{ text }` from the response.
 - If no endpoint is set, returns `{ text: renderedPrompt }`.
 

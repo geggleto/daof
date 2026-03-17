@@ -19,6 +19,16 @@ function isParallelStep(step: SequentialStep | ParallelStep): step is ParallelSt
   return "parallel" in step && Array.isArray((step as ParallelStep).parallel);
 }
 
+function generateStepId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function executeSequentialStep(
   runtime: OrgRuntime,
   step: SequentialStep,
@@ -32,13 +42,14 @@ async function executeSequentialStep(
   if (!agent) {
     throw new Error(`Workflow references unknown agent: ${step.agent}`);
   }
+  const stepId = generateStepId();
   const input: CapabilityInput = step.params ? resolveParams(context, step.params) : {};
   const agentLlm = {
     provider: agent.provider,
     model: agent.model,
     apiKey: getProviderApiKey(agent.provider),
   };
-  const runContext = createRunContext(runtime, step.action, agentLlm, runInfo);
+  const runContext = createRunContext(runtime, step.action, agentLlm, runInfo, stepId, runInfo?.runId, step.agent);
   const startTime = Date.now();
   let output: CapabilityOutput;
   try {
@@ -47,8 +58,8 @@ async function executeSequentialStep(
     throw err;
   }
   const durationMs = Date.now() - startTime;
-  // Attach step duration so downstream steps or Logger can use it (e.g. {{ agent.__step_duration_ms }}).
-  const outputWithDuration = { ...output, __step_duration_ms: durationMs };
+  // Attach step duration and step ID so downstream steps or Logger can use them (e.g. {{ agent.__step_duration_ms }}, {{ agent.__step_id }}).
+  const outputWithDuration = { ...output, __step_duration_ms: durationMs, __step_id: stepId };
   const next = { ...context, [step.agent]: outputWithDuration };
   return next;
 }
@@ -71,14 +82,30 @@ export async function executeParallelStep(
   context: WorkflowContext,
   runInfo?: RunInfo
 ): Promise<WorkflowContext> {
+  // Stagger start of each branch by 1s to avoid multiple processes contending for the same lock (e.g. Cursor CLI update check).
+  const PARALLEL_STAGGER_MS = 1000;
   const results = await Promise.all(
-    step.parallel.map((s) => executeSequentialStep(runtime, s, context, runInfo))
+    step.parallel.map((s, i) =>
+      delayMs(i * PARALLEL_STAGGER_MS).then(() =>
+        executeSequentialStep(runtime, s, context, runInfo)
+      )
+    )
   );
   const merged: WorkflowContext = { ...context };
-  for (const ctx of results) {
-    for (const [agentId, output] of Object.entries(ctx)) {
-      merged[agentId] = output;
+  const stepIds: string[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const ctx = results[i]!;
+    const seqStep = step.parallel[i]!;
+    const agentId = seqStep.agent;
+    const output = ctx[agentId];
+    if (output !== undefined) {
+      merged[`${agentId}_${i}`] = output;
+      const stepId = output.__step_id;
+      if (typeof stepId === "string") stepIds.push(stepId);
     }
+  }
+  if (stepIds.length > 0) {
+    (merged as Record<string, CapabilityOutput | string[]>).__parallel_step_ids = stepIds;
   }
   return merged;
 }

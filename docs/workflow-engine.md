@@ -112,7 +112,7 @@ function runWorkflow(
 
 **Circuit breaker (optional):** `runWorkflow(..., options?: { circuitBreaker })`. When provided, the full graph invoke runs through the breaker; after a threshold of failures (e.g. 5) the circuit opens and the run fails. The CLI uses this and exits gracefully (exit 1) when the circuit is open. See [src/fault/circuit-breaker.ts](src/fault/circuit-breaker.ts) and [docs/verification.md](verification.md).
 
-When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm, runInfo)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.2 Capabilities calling other capabilities](#62-capabilities-calling-other-capabilities)), and when the runtime has a ticket store and runInfo (workflow run), **ticket** `{ id, append(update) }` so capabilities can append observability updates to the run ticket. See [docs/tickets.md](tickets.md).
+When each step runs, the executor builds a **RunContext** via `createRunContext(runtime, step.action, agentLlm, runInfo, stepId, runInfo?.runId, step.agent)`. That RunContext includes **backbone** (when connected), **invokeCapability** so the capability can call other capabilities it declares in **depends_on**, **agentLlm** (the current agent’s provider, model, and resolved API key) so capabilities that call the LLM can use it (see [§6.2 Capabilities calling other capabilities](#62-capabilities-calling-other-capabilities)), and when the runtime has a ticket store and runInfo (workflow run), **ticket** `{ id, append(update) }` so capabilities can append observability updates to the run ticket, **stepId** (a unique UUID for this step execution), **runId** (the workflow run ID), and **agentId** (the id of the agent executing the step). Each sequential step—including each branch inside a parallel step—gets its own step ID. Capabilities can read `runContext.stepId`, `runContext.runId`, and `runContext.agentId`; the same step ID is attached to the step output as `__step_id`, so downstream params can reference it (e.g. `{{ agentId.__step_id }}`). **Skill** prompts can use reserved placeholders **`{{ step_id }}`**, **`{{ run_id }}`**, and **`{{ agent_id }}`**, which are filled from the run context when present (see [docs/capabilities.md](capabilities.md)#skill-runner). See [docs/tickets.md](tickets.md).
 
 **MongoDB is required** for running workflows: the runtime creates both the registry store and the ticket store at bootstrap; connection failure throws.
 
@@ -145,13 +145,13 @@ Example: `"{{ visual_qa.verdict }} && {{ compliance_qa.verdict }}"` — both pat
 
 ## 6. Step execution
 
-- **Sequential step:** `agent`, `action`, optional `params`, `condition`, `on_failure`. Resolve input from `params` (templates resolved); if condition is false, skip step; else `agent.invoke(action, input, runContext)` and set `context[agent] = output`. The **runContext** is built by `createRunContext(runtime, step.action, agentLlm)` and includes **backbone**, **invokeCapability**, and **agentLlm** (provider, model, apiKey for the step’s agent) (see below).
-- **Parallel step:** `parallel: [ ...SequentialStep ]`. Run all via `Promise.all` with the same incoming context; merge outputs by agent id into one context (same key rules as above).
+- **Sequential step:** `agent`, `action`, optional `params`, `condition`, `on_failure`. Resolve input from `params` (templates resolved); if condition is false, skip step; else `agent.invoke(action, input, runContext)` and set `context[agent] = output`. Each step execution gets a unique **step ID** (UUID); the **runContext** is built by `createRunContext(runtime, step.action, agentLlm, runInfo, stepId, runInfo?.runId, step.agent)` and includes **backbone**, **invokeCapability**, **agentLlm** (provider, model, apiKey for the step’s agent), **stepId**, **runId**, and **agentId**. The step output includes `__step_duration_ms` and `__step_id` so downstream params can use `{{ agentId.__step_id }}` (see below).
+- **Parallel step:** `parallel: [ ...SequentialStep ]`. Run all via `Promise.all` with the same incoming context. Results are merged with keys **`agentId_0`**, **`agentId_1`**, … (0-based index in the `parallel` array), so each branch’s output is kept. **`__parallel_step_ids`** is set to an array of step IDs in order (one per branch), so downstream can use `{{ __parallel_step_ids.0 }}`, `{{ __parallel_step_ids.1 }}`, etc. Each branch’s output also has `__step_id` on the output object.
 - **Failure:** On throw, the workflow returns `{ success: false, context, error }`; no retries or fallback in this phase.
 
 ### 6.1. Parallel then sequential
 
-You can run multiple agents in parallel and then run another step. Use one workflow step with `parallel` (each branch is a full sequential step with `agent`, `action`, optional `params`/`condition`); the next step in the `steps` array runs after all parallel branches complete. Downstream steps see each branch’s output under that branch’s agent id.
+You can run multiple agents in parallel and then run another step. Use one workflow step with `parallel` (each branch is a full sequential step with `agent`, `action`, optional `params`/`condition`); the next step in the `steps` array runs after all parallel branches complete. Each branch gets its own step ID and its output is stored under **`agentId_0`**, **`agentId_1`**, … (0-based index). Downstream steps reference outputs with e.g. `{{ security_auditor_0.text }}`, `{{ security_auditor_1.text }}`, and step IDs with `{{ __parallel_step_ids.0 }}`, `{{ __parallel_step_ids.1 }}`.
 
 Example (minimal):
 
@@ -167,11 +167,11 @@ steps:
   - agent: aggregator
     action: merge_results
     params:
-      result_a: "{{ worker_a.text }}"
-      result_b: "{{ worker_b.text }}"
+      result_a: "{{ worker_a_0.text }}"
+      result_b: "{{ worker_b_1.text }}"
 ```
 
-Constraints: no nested `parallel` in v1; if two branches use the same agent id, last write wins in the merged context.
+Constraints: no nested `parallel` in v1. When multiple branches use the same agent id, each output is still kept under a distinct key (`agentId_0`, `agentId_1`, …).
 
 ### 6.2. Capabilities calling other capabilities
 
