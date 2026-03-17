@@ -93,7 +93,8 @@ export function createSkillRunnerInstance(
       const apiKey = agentLlm?.apiKey;
       const service = getProviderService(providerId ?? "", apiKey);
       if (!service) {
-        return { ok: false, error: "Skill has no config.endpoint and no runContext.agentLlm (provider with API key) available." };
+        // No endpoint and no LLM: return rendered template only (e.g. for tests or template-only skills).
+        return { text: renderedPrompt };
       }
       return service.complete(renderedPrompt, {
         model: agentLlm?.model ?? "auto",
