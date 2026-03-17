@@ -26,6 +26,8 @@ Requires **Node 20+**. LLM provider: Cursor for MVP (set `CURSOR_API_KEY`). Redi
 
 ## Quick start
 
+**New here?** Start with [Onboarding](docs/ONBOARDING.md) for a step-by-step first run.
+
 ### 1. Install
 
 ```bash
@@ -280,6 +282,7 @@ Validate with `daof validate org.yaml`. See [docs/workflow-engine.md](docs/workf
 
 | Doc | Description |
 |-----|-------------|
+| [docs/ONBOARDING.md](docs/ONBOARDING.md) | Step-by-step first run: validate, run a workflow, scheduler, build. |
 | [AGENTS.md](AGENTS.md) | Entry point for AI agents; project layout and API reference. |
 | [docs/workflow-engine.md](docs/workflow-engine.md) | Workflow engine, triggers, daemon mode, runWorkflow. |
 | [docs/capabilities.md](docs/capabilities.md) | Capabilities, depends_on, invokeCapability, skills. |
