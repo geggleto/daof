@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type { OrgConfig } from "../schema/index.js";
 import type { Agent } from "../agents/agent.js";
 import type { CapabilityInstance } from "../types/json.js";
@@ -41,17 +42,29 @@ export interface OrgRuntime {
   capabilityMiddleware?: CapabilityMiddleware[];
 }
 
+export interface BootstrapOptions {
+  /** When set, capability source paths are restricted to this file's directory and runtime.orgFilePath is set. */
+  orgFilePath?: string;
+}
+
 /**
  * Load an org from validated config: resolve env refs, load capabilities, resolve middleware, bootstrap agents.
  * Does not connect to backbone or start workflows.
  */
-export async function bootstrap(config: OrgConfig): Promise<OrgRuntime> {
+export async function bootstrap(
+  config: OrgConfig,
+  options?: BootstrapOptions
+): Promise<OrgRuntime> {
   const resolved = resolveEnv(config);
-  const capabilities = await loadCapabilities(resolved);
+  const allowedSourceRoot = options?.orgFilePath ? dirname(options.orgFilePath) : undefined;
+  const capabilities = await loadCapabilities(resolved, {
+    allowedSourceRoot,
+  });
   const runtime: OrgRuntime = {
     config: resolved,
     capabilities,
     agents: new Map(),
+    ...(options?.orgFilePath && { orgFilePath: options.orgFilePath }),
   };
   const agentNames = resolved.middleware?.agent ?? [];
   const capabilityNames = resolved.middleware?.capability ?? [];

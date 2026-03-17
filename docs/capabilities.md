@@ -151,3 +151,5 @@ A capability definition can set **persistence** (e.g. `"redis"`) in the manifest
 | Skill runner | `src/capabilities/bundled/skill_runner.ts` |
 | Scoped store | `src/backbone/capability-store.ts` (createScopedCapabilityStore) |
 | Step execution (builds RunContext) | `src/workflow/executor.ts` |
+
+**Security:** Do not pass secrets or PII into the Logger capability or into ticket update message/payload; see [RISKS.md](../RISKS.md) for accepted risks and operational guidance.

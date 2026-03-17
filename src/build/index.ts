@@ -6,7 +6,7 @@
  */
 import * as readline from "node:readline";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, basename } from "node:path";
+import { dirname } from "node:path";
 import ora from "ora";
 import { getProviderService, getProviderApiKey } from "../providers/registry.js";
 import type { OrgConfig } from "../schema/index.js";
@@ -21,7 +21,6 @@ import { promptPlanner, promptPlannerRevise, promptGenerator, promptVerifier } f
 import {
   extractYamlFromMarkdown,
   looksLikeYamlContent,
-  findMentionedYamlPath,
   extractGenerated,
   mergeIntoConfig,
 } from "./merge.js";
@@ -209,7 +208,7 @@ export async function runBuild(
     return result;
   }
 
-  const runtime = await bootstrap(config);
+  const runtime = await bootstrap(config, { orgFilePath });
   if (runtime.registry) {
     const fromReg = await runtime.registry.listAll();
     existingCapabilityIds = [...new Set([...existingCapabilityIds, ...fromReg.capability_ids])];
@@ -389,42 +388,18 @@ export async function runBuild(
           console.error(`[build] Generator response length: ${genText.length} chars, after strip: ${stripped.length} chars`);
         }
         let parsed: ParsedYaml | undefined;
-        if (!looksLikeYamlContent(stripped)) {
-          const yamlPath = findMentionedYamlPath(genText);
-          if (yamlPath) {
-            for (const tryPath of [yamlPath, yamlPath.includes("/") ? basename(yamlPath) : null].filter(Boolean) as string[]) {
-              try {
-                const fromFile = loadYaml(tryPath);
-                const fromFileGen = extractGenerated(fromFile);
-                if (
-                  Object.keys(fromFileGen.capabilities).length > 0 ||
-                  Object.keys(fromFileGen.agents).length > 0 ||
-                  Object.keys(fromFileGen.workflows).length > 0
-                ) {
-                  parsed = fromFile;
-                  if (verbose >= 1) console.error(`[build] Using YAML from mentioned file: ${tryPath}`);
-                  break;
-                }
-              } catch {
-                /* try next path or fall through to parse stripped */
-              }
-            }
-          }
-        }
-        if (parsed === undefined) {
-          try {
-            parsed = parseYamlString(stripped);
-          } catch (e) {
-            const parseErr = e instanceof Error ? e : new Error(String(e));
-            lastError = !looksLikeYamlContent(stripped)
-              ? new Error(
-                  "Generator did not return valid YAML in the response (it may have written to a file or returned only a summary). The generator must output the full YAML in the response, e.g. inside a ```yaml code block. Original parse error: " +
-                    parseErr.message
-                )
-              : parseErr;
-            if (verbose >= 2) console.error("[build] YAML parse error:", parseErr.message);
-            continue;
-          }
+        try {
+          parsed = parseYamlString(stripped);
+        } catch (e) {
+          const parseErr = e instanceof Error ? e : new Error(String(e));
+          lastError = !looksLikeYamlContent(stripped)
+            ? new Error(
+                "Generator did not return valid YAML in the response (it may have written to a file or returned only a summary). The generator must output the full YAML in the response, e.g. inside a ```yaml code block. Original parse error: " +
+                  parseErr.message
+              )
+            : parseErr;
+          if (verbose >= 2) console.error("[build] YAML parse error:", parseErr.message);
+          continue;
         }
         const generated = extractGenerated(parsed);
         if (

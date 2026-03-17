@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import { registerBundled } from "./registry.js";
+import { resolvePathUnderBase } from "../../config/path-safety.js";
 import { copyFile, mkdir } from "fs/promises";
 import { pathToFileURL } from "url";
 import { join } from "path";
@@ -11,6 +12,14 @@ function getBasePath(def: CapabilityDefinition): string {
     return (c as Record<string, string>).base_path;
   }
   return process.cwd();
+}
+
+function getAllowedSourcePath(def: CapabilityDefinition): string {
+  const c = def.config;
+  if (c && typeof c === "object" && "allowed_source_path" in c && typeof (c as Record<string, unknown>).allowed_source_path === "string") {
+    return (c as Record<string, string>).allowed_source_path;
+  }
+  return getBasePath(def);
 }
 
 const DESTINATIONS = ["s3", "local"] as const;
@@ -29,6 +38,7 @@ export function createFileUploaderInstance(
   def: CapabilityDefinition
 ): CapabilityInstance {
   const basePath = getBasePath(def);
+  const allowedSourceRoot = getAllowedSourcePath(def);
 
   return {
     async execute(
@@ -47,12 +57,13 @@ export function createFileUploaderInstance(
       }
 
       try {
+        const sourcePath = resolvePathUnderBase(filePath, allowedSourceRoot);
         const { basename } = await import("path");
-        const name = basename(filePath);
+        const name = basename(sourcePath);
         const destDir = basePath;
         await mkdir(destDir, { recursive: true });
         const destPath = join(destDir, name);
-        await copyFile(filePath, destPath);
+        await copyFile(sourcePath, destPath);
         const url = pathToFileURL(destPath).href;
         return { url };
       } catch (err) {

@@ -1,6 +1,7 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
 import type { RunContext } from "../../runtime/run-context.js";
+import { resolvePathUnderBase } from "../../config/path-safety.js";
 import { loadYaml, validate, parseYamlString, writeOrgFile } from "../../parser/index.js";
 import { extractYamlFromMarkdown, extractGenerated, mergeIntoConfig } from "../../build/merge.js";
 import { registerBundled } from "./registry.js";
@@ -18,9 +19,9 @@ export function createMergeAndWriteInstance(
       input: CapabilityInput,
       runContext?: RunContext
     ): Promise<CapabilityOutput> {
-      const orgPath = typeof input.org_path === "string" ? input.org_path : "";
+      const orgPathInput = typeof input.org_path === "string" ? input.org_path : "";
       const generatedYaml = typeof input.generated_yaml === "string" ? input.generated_yaml : "";
-      if (!orgPath || !generatedYaml) {
+      if (!orgPathInput || !generatedYaml) {
         return { ok: false, error: "Missing org_path or generated_yaml" };
       }
       let config;
@@ -32,6 +33,13 @@ export function createMergeAndWriteInstance(
           return { ok: false, error: `Failed to validate current org config: ${msg}` };
         }
       } else {
+        let orgPath: string;
+        try {
+          orgPath = resolvePathUnderBase(orgPathInput, process.cwd());
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, error: `org_path is outside allowed base: ${msg}` };
+        }
         try {
           const raw = loadYaml(orgPath);
           config = validate(raw);
@@ -66,6 +74,13 @@ export function createMergeAndWriteInstance(
       if (runContext?.updateOrgConfig) {
         runContext.updateOrgConfig(merged);
       } else {
+        let orgPath: string;
+        try {
+          orgPath = resolvePathUnderBase(orgPathInput, process.cwd());
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, error: `org_path is outside allowed base: ${msg}` };
+        }
         try {
           writeOrgFile(orgPath, merged);
         } catch (err) {

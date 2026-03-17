@@ -76,6 +76,12 @@ describe("WebhookNotifier", () => {
     expect(out).toEqual({ ok: true });
     vi.unstubAllGlobals();
   });
+
+  it("returns URL not allowed for private/IP or link-local hosts", async () => {
+    const cap = createWebhookNotifierInstance("webhook_notifier", emptyDef);
+    const out = await cap.execute({ url: "https://169.254.169.254/latest/meta-data/", message: "x" });
+    expect(out).toEqual({ ok: false, error: expect.stringContaining("URL not allowed") });
+  });
 });
 
 describe("KeyValueStore", () => {
@@ -411,7 +417,7 @@ workflows: {}
     expect(merged.capabilities).toHaveProperty("new_cap");
   });
 
-  it("when runContext has no updateOrgConfig, returns error for missing file (loadYaml fails) unless path exists", async () => {
+  it("when runContext has no updateOrgConfig, returns error for path outside base or missing file", async () => {
     const cap = createMergeAndWriteInstance("merge_and_write", { type: "tool" });
     const generatedYaml = `
 capabilities:
@@ -421,10 +427,15 @@ capabilities:
 agents: {}
 workflows: {}
 `;
-    const out = await cap.execute(
+    const outOutside = await cap.execute(
       { org_path: "/nonexistent/org.yaml", generated_yaml: generatedYaml },
       undefined
     );
-    expect(out).toMatchObject({ ok: false, error: expect.stringContaining("Failed to load") });
+    expect(outOutside).toMatchObject({ ok: false, error: expect.stringContaining("outside allowed base") });
+    const outMissing = await cap.execute(
+      { org_path: "nonexistent-dir/org.yaml", generated_yaml: generatedYaml },
+      undefined
+    );
+    expect(outMissing).toMatchObject({ ok: false, error: expect.stringContaining("Failed to load") });
   });
 });

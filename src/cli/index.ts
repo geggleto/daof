@@ -30,6 +30,26 @@ import {
 } from "./pidfile.js";
 import ora from "ora";
 
+const SENSITIVE_KEYS = new Set(["token", "api_key", "password", "secret", "apiKey", "access_token", "accessToken"]);
+
+function redactSensitiveKeys(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(redactSensitiveKeys);
+  if (typeof obj === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const keyLower = k.toLowerCase();
+      if (SENSITIVE_KEYS.has(k) || SENSITIVE_KEYS.has(keyLower) || keyLower.includes("password") || keyLower.includes("secret") || keyLower.includes("token")) {
+        out[k] = "[REDACTED]";
+      } else {
+        out[k] = redactSensitiveKeys(v);
+      }
+    }
+    return out;
+  }
+  return obj;
+}
+
 const program = new Command();
 
 program
@@ -111,7 +131,7 @@ runCmd.action(async (file: string) => {
   try {
     const raw = loadYaml(file);
     const config = validate(raw);
-    const runtime = await bootstrap(config);
+    const runtime = await bootstrap(config, { orgFilePath: file });
 
     await connectBackbone(runtime);
 
@@ -160,7 +180,7 @@ runCmd.action(async (file: string) => {
         }
         if ((opts.verbose ?? 0) >= 3) {
           console.log("Output:");
-          console.log(JSON.stringify(result.context, null, 2));
+          console.log(JSON.stringify(redactSensitiveKeys(result.context), null, 2));
         }
         process.exit(0);
       } else {
@@ -371,7 +391,7 @@ planCmd.action(async (descriptionArg: string) => {
     }
   }
 
-  const runtime = await bootstrap(config);
+  const runtime = await bootstrap(config, { orgFilePath: orgFilePath });
   const apiKey = getProviderApiKey(providerId);
   const service = getProviderService(providerId, apiKey);
   if (!service) {

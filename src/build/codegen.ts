@@ -4,6 +4,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import ora from "ora";
+import { sanitizeCapabilityIdForPath, resolvePathUnderBase } from "../config/path-safety.js";
 import { getProviderService, getProviderApiKey } from "../providers/registry.js";
 import { loadYaml, validate, writeOrgFile } from "../parser/index.js";
 import { promptCapabilityCodegen } from "./prompts.js";
@@ -126,11 +127,12 @@ export async function runCodegenPhase(
   for (const id of newCapabilityIds) {
     const def = config.capabilities[id];
     if (!def || def.type !== "tool" || BUNDLED_IDS.has(id)) continue;
+    sanitizeCapabilityIdForPath(id);
     const codegenSpinner = ora("Codegen " + id + "…").start();
     if (verbose >= 1) console.error("[build] Codegen " + id + "...");
     try {
       const code = await runCodegenForOne(providerId, id, def, verbose);
-      const filePath = join(dir, id + ".ts");
+      const filePath = resolvePathUnderBase(id + ".ts", dir);
       writeFileSync(filePath, code, "utf-8");
       (config.capabilities[id] as Record<string, unknown>).source = codegenDir + "/" + id + ".ts";
       didCodegen = true;
@@ -170,6 +172,7 @@ export async function runCodegenPhaseForBundle(
   for (const id of newCapabilityIds) {
     const def = config.capabilities[id];
     if (!def || def.type !== "tool" || BUNDLED_IDS.has(id)) continue;
+    sanitizeCapabilityIdForPath(id);
     const codegenSpinner = ora("Codegen " + id + " (bundle)…").start();
     if (verbose >= 1) console.error("[build] Codegen " + id + " (bundle)...");
     try {
@@ -181,7 +184,7 @@ export async function runCodegenPhaseForBundle(
           `Generated code for ${id} has no default-exported function; bundled capabilities must use "export default function ..." so the build can normalize to a named export.`
         );
       }
-      const filePath = join(bundledDir, id + ".ts");
+      const filePath = resolvePathUnderBase(id + ".ts", bundledDir);
       writeFileSync(filePath, normalized, "utf-8");
       additions.push({ id, factoryName, usedNamedExport });
       didCodegen = true;

@@ -49,3 +49,4 @@ For the **full class and type map**, and **all exported function/interface signa
 - [docs/registry.md](docs/registry.md) — Skills/capabilities registry (MongoDB), staleness, archiving, prune_registry, Curator agent.
 - [docs/tickets.md](docs/tickets.md) — Ticketing: one ticket per workflow run, RunContext.ticket, `daof ticket <id>`, Mongo required.
 - [docs/prd.md](docs/prd.md), [docs/tip.md](docs/tip.md), [docs/backlog.md](docs/backlog.md) — Product and backlog context.
+- [RISKS.md](RISKS.md) — Accepted security risks (CLI file path, logger/ticket data exposure) and operational guidance.

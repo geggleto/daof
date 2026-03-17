@@ -1,16 +1,29 @@
 import type { CapabilityInstance, CapabilityInput, CapabilityOutput } from "../../types/json.js";
 import type { CapabilityDefinition } from "../../schema/index.js";
+import { isUrlAllowed } from "../../config/url-safety.js";
 import { getAuthHeadersFromCapabilityConfig } from "../auth/registry.js";
 import { registerBundled } from "./registry.js";
 
+function getUrlAllowOptions(def: CapabilityDefinition): { allowHttp?: boolean; allowedHosts?: string[] } {
+  const c = def.config;
+  if (!c || typeof c !== "object") return {};
+  const allowHttp = "allow_http" in c && (c as Record<string, unknown>).allow_http === true;
+  const allowedHosts =
+    "allowed_hosts" in c && Array.isArray((c as Record<string, unknown>).allowed_hosts)
+      ? ((c as Record<string, string[]>).allowed_hosts.filter((h): h is string => typeof h === "string"))
+      : undefined;
+  return { allowHttp, allowedHosts };
+}
+
 /**
  * Bundled WebhookNotifier capability. Input: { url, message }. Output: { ok: true } or { ok: false, error }.
- * HTTP POST to url with body { message }. Optional auth via config.auth or config.api_key. No persistence.
+ * Only HTTPS URLs are allowed by default (or HTTP if config.allow_http); private/IP and link-local hosts are blocked. Optional config.allowed_hosts allowlist.
  */
 export function createWebhookNotifierInstance(
   _capabilityId: string,
   def: CapabilityDefinition
 ): CapabilityInstance {
+  const urlOptions = getUrlAllowOptions(def);
   return {
     async execute(
       input: CapabilityInput,
@@ -20,6 +33,9 @@ export function createWebhookNotifierInstance(
       const message = typeof input.message === "string" ? input.message : String(input.message ?? "");
       if (!url) {
         return { ok: false, error: "Missing url" };
+      }
+      if (!isUrlAllowed(url, urlOptions)) {
+        return { ok: false, error: "URL not allowed (use HTTPS and avoid private/IP or link-local hosts, or set config.allowed_hosts)" };
       }
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
