@@ -15,7 +15,7 @@
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "validate": "node dist/cli/index.js validate org.example.yaml",
     "prepublishOnly": "npm run build",
-    "prepare": "node -e \"const fs=require('fs');if(!fs.existsSync('dist/cli/index.js')){require('child_process').execSync('npx --yes typescript@5.7.2 tsc',{stdio:'inherit'})}\""
+    "prepare": "node -e \"const fs=require('fs');if(!fs.existsSync('dist/cli/index.js')){require('child_process').execSync('npx --yes -p typescript@5.7.2 tsc',{stdio:'inherit'})}\""
   },
   "keywords": [
     "daof",
