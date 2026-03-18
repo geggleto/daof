@@ -106,7 +106,7 @@ capabilities:
       5. **Phase 4  Comparative analysis:** Compare changed or in-scope code against existing secure patterns; flag any deviation or new attack surface. If `docs/security/audits/` exists, verify the PR/codebase does not re-introduce previously fixed issues.
 
       Output Rules (MANDATORY):
-      - Your ENTIRE response must be valid Markdown that is the exact content of a file named `findings/security-audit-{{ run_id }}-{{ step_id }}.md` (use current UTC date) in the target code path.
+      - Your ENTIRE response must be valid Markdown that is the exact content of a file named {{ target_code_path }}/findings/security-audit-{{ run_id }}-{{ step_id }}.md` (use current UTC date) in the target code path.
       - Start directly with the markdown — no preamble, no Here is the audit, no thinking aloud.
       - Structure:
         # Security Audit (YYYY-MM-DD UTC)
