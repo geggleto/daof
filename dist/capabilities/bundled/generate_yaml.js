@@ -1,0 +1,54 @@
+import { getProviderService } from "../../providers/registry.js";
+import { promptGenerator } from "../../build/prompts.js";
+import { registerBundled } from "./registry.js";
+function toStringList(v) {
+    if (Array.isArray(v)) {
+        return v.map((x) => (typeof x === "string" ? x : String(x)));
+    }
+    if (typeof v === "string") {
+        return v.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+}
+/**
+ * Bundled generate_yaml capability (Generator). Input: { description, prd, existing_capabilities? }.
+ * Output: { yaml } or { ok: false, error }. Uses runContext.agentLlm.
+ */
+export function createGenerateYamlInstance(_capabilityId, _def) {
+    return {
+        async execute(input, runContext) {
+            const description = typeof input.description === "string" ? input.description : "";
+            const prd = typeof input.prd === "string" ? input.prd : "";
+            if (!description || !prd) {
+                return { ok: false, error: "Missing description or prd" };
+            }
+            const existingCapabilities = toStringList(input.existing_capabilities);
+            const agentLlm = runContext?.agentLlm;
+            const service = getProviderService(agentLlm?.provider ?? "", agentLlm?.apiKey);
+            if (!service) {
+                return {
+                    ok: false,
+                    error: "Generator requires runContext.agentLlm (provider with API key).",
+                };
+            }
+            const prompt = promptGenerator(description, prd, existingCapabilities);
+            const result = await service.complete(prompt, {
+                max_tokens: 4000,
+                model: agentLlm?.model ?? "auto",
+            });
+            if (!result || ("ok" in result && result.ok === false)) {
+                return {
+                    ok: false,
+                    error: "ok" in result && result.ok === false ? result.error : "Generator failed",
+                };
+            }
+            const yaml = ("text" in result ? result.text : "").trim();
+            if (!yaml) {
+                return { ok: false, error: "Generator returned empty response." };
+            }
+            return { yaml };
+        },
+    };
+}
+registerBundled("generate_yaml", createGenerateYamlInstance);
+//# sourceMappingURL=generate_yaml.js.map

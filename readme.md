@@ -36,6 +36,14 @@ npm install -g daof
 
 Or in a project: `npm install daof` and run via `npx daof` or `node_modules/.bin/daof`.
 
+From GitHub (prebuilt `dist/` is in the repo so install does not run `tsc`):
+
+```bash
+npm install -g geggleto/daof
+```
+
+**Contributors:** when you change `src/`, run `npm run build` and commit the updated `dist/` with your PR.
+
 ### 2. Environment
 
 The CLI loads `.env` and `.env.local` from the current working directory (via dotenv). Set `CURSOR_API_KEY`, `REGISTRY_MONGO_URI`, etc. there, or export them in the shell.
@@ -299,6 +307,8 @@ Validate with `daof validate org.yaml`. See [docs/workflow-engine.md](docs/workf
 ## Contributing
 
 We want DAOF to become the standard way to define agentic systems. PRs welcome: new capabilities, backbone adapters, or fixes. See [AGENTS.md](AGENTS.md) for structure and types.
+
+**Build output:** `dist/` is tracked in git so `npm install -g geggleto/daof` works. After editing TypeScript under `src/`, run `npm run build` and include `dist/` in your commit.
 
 ---
 

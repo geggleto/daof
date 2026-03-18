@@ -1,0 +1,1 @@
+{"version":3,"file":"trigger.d.ts","sourceRoot":"","sources":["../../src/workflow/trigger.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAA6B,aAAa,EAAE,MAAM,YAAY,CAAC;AAE3E,MAAM,MAAM,aAAa,GAAG,CAAC,OAAO,EAAE,MAAM,KAAK,aAAa,GAAG,IAAI,CAAC;AAItE;;;;GAIG;AACH,wBAAgB,qBAAqB,CAAC,MAAM,EAAE,aAAa,GAAG,IAAI,CAEjE;AA0BD;;;GAGG;AACH,wBAAgB,YAAY,CAAC,OAAO,EAAE,MAAM,GAAG,aAAa,CAO3D"}

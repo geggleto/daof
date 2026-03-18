@@ -10,6 +10,7 @@ DAOF (Declarative Agentic Orchestration Framework) runs autonomous AI organizati
 
 | Path | Description |
 |------|--------------|
+| `dist/` | Compiled JS from `src/` (committed so `npm i -g` from GitHub works). Run `npm run build` after changing `src/` and commit `dist/`. |
 | `src/` | TypeScript source. For full types and signatures see [docs/API_REFERENCE.md](docs/API_REFERENCE.md). |
 | `src/cli/` | CLI entry (`daof` commands) and PID/detach helpers. |
 | `src/runtime/` | Bootstrap, run context (RunContext for capabilities), middleware pipeline (agent/capability), agent-metrics store, middleware registry. |

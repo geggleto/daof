@@ -21,13 +21,12 @@ yarn.lock
 .env.test.local
 .env.production.local
 
-# Build and Output Directories (root-level only; src/build/ is the DAOF build module)
-dist/
+# Build and Output Directories
+# Root dist/ is committed so `npm i -g github:geggleto/daof` works (npm cannot compile before deps exist).
 /build/
 out/
 .next/
 **/.next/
-**/dist/
 **/.prisma/
 **/storybook-static/
 

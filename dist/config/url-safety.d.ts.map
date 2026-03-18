@@ -1,0 +1,1 @@
+{"version":3,"file":"url-safety.d.ts","sourceRoot":"","sources":["../../src/config/url-safety.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,eAAe;IAC9B,iEAAiE;IACjE,SAAS,CAAC,EAAE,OAAO,CAAC;IACpB,iHAAiH;IACjH,YAAY,CAAC,EAAE,MAAM,EAAE,CAAC;CACzB;AAwBD;;;GAGG;AACH,wBAAgB,YAAY,CAAC,GAAG,EAAE,MAAM,EAAE,OAAO,CAAC,EAAE,eAAe,GAAG,OAAO,CAuB5E"}

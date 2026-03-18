@@ -1,0 +1,1 @@
+{"version":3,"file":"event_emitter.d.ts","sourceRoot":"","sources":["../../../src/capabilities/bundled/event_emitter.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,kBAAkB,EAAqC,MAAM,qBAAqB,CAAC;AACjG,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,uBAAuB,CAAC;AAWlE;;;GAGG;AACH,wBAAgB,0BAA0B,CACxC,aAAa,EAAE,MAAM,EACrB,GAAG,EAAE,oBAAoB,GACxB,kBAAkB,CAoBpB"}

@@ -1,0 +1,62 @@
+import { TwitterApi } from "twitter-api-v2";
+import { registerBundled } from "./registry.js";
+function getStr(config, key) {
+    if (!config || typeof config !== "object")
+        return "";
+    const v = config[key];
+    return typeof v === "string" ? v : "";
+}
+function isDryRun(config) {
+    if (!config || typeof config !== "object")
+        return false;
+    const v = config.dry_run;
+    if (v === true)
+        return true;
+    if (typeof v === "string" && (v === "true" || v === "1"))
+        return true;
+    return false;
+}
+/**
+ * Bundled XPoster capability using Twitter API v2 SDK. Input: { content, media_urls? }. Output: { post_id } or { ok: false, error }.
+ * Uses twitter-api-v2; when config has OAuth 1.0a credentials (app_key, app_secret, access_token, access_token_secret, all from env),
+ * posts the tweet via client.v2.tweet(content). Otherwise returns stub { post_id: "stub" }.
+ * When config.dry_run is true (or env-resolved "true"/"1"), skips the API call and returns { post_id: "dry-run", dry_run: true }.
+ */
+export function createXPosterInstance(_capabilityId, def) {
+    return {
+        async execute(input, _runContext) {
+            const content = typeof input.content === "string" ? input.content : "";
+            if (!content) {
+                return { ok: false, error: "Missing content" };
+            }
+            const config = def.config;
+            if (isDryRun(config)) {
+                return { post_id: "dry-run", dry_run: true };
+            }
+            const appKey = getStr(config, "app_key");
+            const appSecret = getStr(config, "app_secret");
+            const accessToken = getStr(config, "access_token");
+            const accessSecret = getStr(config, "access_token_secret");
+            if (!appKey || !appSecret || !accessToken || !accessSecret) {
+                return { post_id: "stub" };
+            }
+            try {
+                const client = new TwitterApi({
+                    appKey,
+                    appSecret,
+                    accessToken,
+                    accessSecret,
+                });
+                const result = await client.v2.tweet(content);
+                const postId = result.data?.id ?? "stub";
+                return { post_id: postId };
+            }
+            catch (err) {
+                const error = err instanceof Error ? err.message : String(err);
+                return { ok: false, error };
+            }
+        },
+    };
+}
+registerBundled("x_poster", createXPosterInstance);
+//# sourceMappingURL=x_poster.js.map

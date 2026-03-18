@@ -14,8 +14,7 @@
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "validate": "node dist/cli/index.js validate org.example.yaml",
-    "prepublishOnly": "npm run build",
-    "postinstall": "node scripts/postinstall-build.cjs"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "daof",
@@ -52,16 +51,15 @@
     "p-circuit-breaker": "^0.0.3",
     "twitter-api-v2": "^1.29.0",
     "yaml": "^2.6.1",
-    "zod": "^3.23.8",
-    "@types/node": "^22.10.1",
-    "@types/node-cron": "^3.0.11",
-    "typescript": "^5.7.2"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.7.2",
     "vitest": "^2.1.6"
   },
   "files": [
-    "dist",
-    "scripts/postinstall-build.cjs"
+    "dist"
   ]
 }

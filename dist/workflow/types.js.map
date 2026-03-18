@@ -1,0 +1,1 @@
+{"version":3,"file":"types.js","sourceRoot":"","sources":["../../src/workflow/types.ts"],"names":[],"mappings":"AA+BA,sEAAsE;AACtE,MAAM,OAAO,sBAAuB,SAAQ,KAAK;IACnB;IAA5B,YAA4B,KAAa;QACvC,KAAK,CAAC,2BAA2B,KAAK,EAAE,CAAC,CAAC;QADhB,UAAK,GAAL,KAAK,CAAQ;QAEvC,IAAI,CAAC,IAAI,GAAG,wBAAwB,CAAC;IACvC,CAAC;CACF"}

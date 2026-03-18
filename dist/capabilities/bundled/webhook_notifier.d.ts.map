@@ -1,0 +1,1 @@
+{"version":3,"file":"webhook_notifier.d.ts","sourceRoot":"","sources":["../../../src/capabilities/bundled/webhook_notifier.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,kBAAkB,EAAqC,MAAM,qBAAqB,CAAC;AACjG,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,uBAAuB,CAAC;AAgBlE;;;GAGG;AACH,wBAAgB,6BAA6B,CAC3C,aAAa,EAAE,MAAM,EACrB,GAAG,EAAE,oBAAoB,GACxB,kBAAkB,CAoCpB"}

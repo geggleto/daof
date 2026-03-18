@@ -1,0 +1,1 @@
+{"version":3,"file":"run-org.d.ts","sourceRoot":"","sources":["../../src/runtime/run-org.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,gBAAgB,CAAC;AASjD,MAAM,WAAW,mBAAmB;IAClC,qFAAqF;IACrF,gBAAgB,CAAC,EAAE,MAAM,IAAI,CAAC;CAC/B;AAED;;;;;GAKG;AACH,wBAAsB,YAAY,CAChC,OAAO,EAAE,UAAU,EACnB,OAAO,CAAC,EAAE,mBAAmB,GAC5B,OAAO,CAAC,IAAI,CAAC,CAuCf"}

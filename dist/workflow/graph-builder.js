@@ -1,0 +1,40 @@
+import { START, END, StateGraph } from "@langchain/langgraph";
+import { WorkflowStateAnnotation } from "./langgraph-state.js";
+import { executeStep } from "./executor.js";
+import { WorkflowCancelledError } from "./types.js";
+/**
+ * Build a LangGraph StateGraph for a DAOF workflow. One node per step; nodes call
+ * executeStep and return context updates. When runRegistry is provided, each node
+ * checks for cancellation before executing (between-step cancel).
+ */
+export function buildWorkflowGraph(runtime, workflow, runRegistry, workflowId) {
+    const steps = workflow.steps;
+    const graph = new StateGraph(WorkflowStateAnnotation);
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const nodeName = `step_${i}`;
+        const nodeFn = async (state, config) => {
+            const runId = config?.configurable?.run_id;
+            if (runRegistry && runId && (await runRegistry.isCancelled(runId))) {
+                throw new WorkflowCancelledError(runId);
+            }
+            const context = (state.context ?? {});
+            const runInfo = workflowId && runId ? { workflowId, runId } : undefined;
+            const nextContext = await executeStep(runtime, step, context, runInfo);
+            return { context: nextContext };
+        };
+        graph.addNode(nodeName, nodeFn);
+    }
+    if (steps.length === 0) {
+        graph.addEdge(START, END);
+    }
+    else {
+        graph.addEdge(START, "step_0");
+        for (let i = 0; i < steps.length - 1; i++) {
+            graph.addEdge(`step_${i}`, `step_${i + 1}`);
+        }
+        graph.addEdge(`step_${steps.length - 1}`, END);
+    }
+    return graph;
+}
+//# sourceMappingURL=graph-builder.js.map
